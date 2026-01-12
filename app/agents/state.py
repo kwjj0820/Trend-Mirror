@@ -22,6 +22,10 @@ class TMState(TypedDict, total=False):
     retrieved: List[Dict[str, Any]]        # top 25 raw
     reranked: List[Dict[str, Any]]         # top 10 after judge
 
+    # --- Keyword Extraction Outputs ---
+    csv_path: str
+    output_path: str
+
     # --- Gen Agent Outputs ---
     final_answer: str
     final_pdf_path: str

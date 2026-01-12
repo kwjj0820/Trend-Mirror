@@ -34,28 +34,30 @@ Output strictly in JSON format:
 
 
 def strategy_build_node(state: TMState):
+    logger.info("--- (1) Entered Strategy Builder Subgraph ---")
     user_input = state["user_input"]
     solar = get_solar_chat()
 
     messages = [
         SystemMessage(content=BUILD_SYSTEM_PROMPT),
-        HumanMessage(content=user_input)
+        HumanMessage(content=f"User Input: '{user_input}'")
     ]
 
-    logger.info(f"[StrategyBuild] Analyzing intent for: {user_input}")
+    logger.info("Calling LLM to analyze user intent...")
     response = solar.invoke(messages)
     parsed = clean_and_parse_json(response.content)
 
     # [수정 포인트 1] 파싱 실패 시 기본 에러 메시지 반환
     if not parsed:
-        logger.error("[StrategyBuild] Failed to parse JSON")
+        logger.error("Failed to parse JSON from LLM response.")
         return {
             "intent": "chitchat",
             "final_answer": "죄송합니다. 의도를 정확히 파악하지 못했습니다. 트렌드 분석을 원하시면 주제를 말씀해 주세요."
         }
 
     intent = parsed.get("intent")
-    logger.info(f"[StrategyBuild] Result: {parsed}")
+    logger.info(f"Intent analysis complete. Intent='{intent}', Slots='{parsed.get('slots')}'")
+    logger.info("--- Strategy Builder Subgraph Finished ---")
 
     # [수정 포인트 2] Chitchat인 경우 안내 메시지(final_answer) 추가
     if intent == "chitchat":
