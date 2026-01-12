@@ -21,6 +21,7 @@ def _get(url: str, params: dict, timeout=30, retries=3):
     return r
 
 def yt_search(query: str, max_results: int = 50, days: int = 30, pages: int = 1) -> List[Dict[str, Any]]:
+    
     published_after = (datetime.datetime.utcnow() - datetime.timedelta(days=days)).isoformat("T") + "Z"
 
     items_out = []
