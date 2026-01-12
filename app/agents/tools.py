@@ -131,41 +131,26 @@ def generate_report_pdf(content: str, filename: str = "trendmirror_report.pdf") 
 
 
 @tool
-def youtube_crawling_tool(query: str, max_results: int = 10) -> str:
+def youtube_crawling_tool(query: str, days: int = 30) -> str:
     """
-    [가상 도구] 유튜브 검색을 시뮬레이션하고 결과를 CSV 파일로 저장합니다.
-    실제 구현에서는 유튜브 API를 사용하여 데이터를 크롤링해야 합니다.
+    YouTube 트렌드 데이터를 수집하여 CSV 파일로 저장하고 그 경로를 반환합니다.
+    실제 app.repository.client.youtube_client를 사용합니다.
     """
+    from app.repository.client.youtube_client import collect_youtube_trend_candidates_df
     import pandas as pd
+
     out_dir = "downloads"
     pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
-    file_path = f"{out_dir}/youtube_dummy_data.csv"
+    # 파일 이름에 쿼리와 날짜를 포함하여 캐싱 효과를 기대
+    safe_query = "".join(c for c in query if c.isalnum())
+    file_path = f"{out_dir}/youtube_{safe_query}_{days}d_real_data.csv"
 
-    # 테스트를 위한 가상 데이터 생성
-    dummy_data = {
-        'title': [
-            '요즘 난리난 신상 디저트 탕후루보다 맛있다고? ASMR',
-            'SUB) 꽁꽁 얼어붙은 한강 위로 고양이가 걸어다닙니다',
-            '요아정(요거트아이스크림의정석) 처음 먹어본 외국인 반응',
-            '도쿄 여행 브이로그, 시부야 스카이와 두바이 쫀득 쿠키 먹방',
-            'MZ 신조어 테스트, 당신은 얼마나 알고 있나요?',
-            '누가 내 머리에 똥쌌어 챌린지 ㅋㅋㅋ',
-            '2024년 여름 패션 하울! 실패없는 BEST 아이템 추천',
-            'K-직장인 점심시간 브이로그 (feat.압구정 핫플)',
-            '고든램지 버거 솔직리뷰! 가격이 정말..',
-            '이 조합 미쳤다.. 불닭볶음면과 한우 조합, 이건 못참지'
-        ],
-        'url': [f'https://www.youtube.com/watch?v=dummy{i}' for i in range(10)]
-    }
-    df = pd.DataFrame(dummy_data)
-
-    # 항상 전체 더미 데이터를 사용하도록 필터링 로직 제거
-    # if query:
-    #     df = df[df['title'].str.contains(query, case=False)]
-    df = df.head(max_results)
-
-    df.to_csv(file_path, index=False, encoding='utf-8-sig')
-    return f"유튜브 검색 결과가 다음 경로에 CSV 파일로 저장되었습니다: {file_path}"
+    try:
+        df = collect_youtube_trend_candidates_df(days=days)
+        df.to_csv(file_path, index=False, encoding='utf-8-sig')
+        return f"유튜브 검색 결과가 다음 경로에 CSV 파일로 저장되었습니다: {file_path}"
+    except Exception as e:
+        return f"Error during youtube crawling: {e}"
 
 
 @tool

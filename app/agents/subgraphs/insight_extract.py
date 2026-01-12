@@ -8,14 +8,14 @@ from app.agents.tools import (
     youtube_crawling_tool,
     run_keyword_extraction
 )
-from app.repository.client.search_client import SerperSearchClient
+# from app.repository.client.search_client import SerperSearchClient # 삭제
 from app.service.vector_service import VectorService
 from app.agents.utils import rerank_llm_judge
 from app.core.logger import logger
 import os
 
 # Repository & Client 인스턴스
-search_client = SerperSearchClient()
+# search_client = SerperSearchClient() # 삭제
 
 
 def insight_extract_node(state: TMState, config: RunnableConfig):
