@@ -126,21 +126,13 @@ UPSTAGE_API_KEY="YOUR_UPSTAGE_API_KEY"
 SERPER_API_KEY="YOUR_SERPER_API_KEY"
 ```
 
-### 2. 의존성 설치
+### 2. 서버 실행
 
 `pyproject.toml` 파일이 있는 루트 디렉토리에서 다음 명령어를 실행하여 필요한 라이브러리를 설치합니다. `uv` 와 같은 가상환경 및 패키지 관리 도구 사용을 권장합니다.
 
 ```bash
-uv sync
+uv run main
 ```
 
-### 3. 서버 실행
-
-가상환경이 활성화된 상태에서, 다음 명령어를 실행하여 FastAPI 서버를 시작합니다.
-필요한 디렉토리(logs, downloads 등)는 서버 시작 시 자동으로 생성됩니다.
-
-```bash
-python main.py
-```
 
 서버가 정상적으로 실행되면, `http://localhost:8000/docs` 에서 API 문서를 확인할 수 있습니다.
