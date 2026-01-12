@@ -1,6 +1,7 @@
 # app/repository/client/llm_client.py
 import os
 from langchain_upstage import ChatUpstage, UpstageEmbeddings
+from openai import OpenAI
 from dotenv import load_dotenv
 from app.repository.client.base import BaseLLMClient
 
@@ -14,8 +15,14 @@ class UpstageClient(BaseLLMClient):
         # 노트북 설정 반영: solar-pro2, solar-embedding-1-large
         self.chat_model_name = os.getenv("UPSTAGE_LLM_MODEL", "solar-pro2")
         self.embedding_model_name = os.getenv("UPSTAGE_EMB_QUERY_MODEL", "solar-embedding-1-large")
+
+        # 키워드 추출 에이전트를 위한 모델 및 URL
+        self.keyword_extract_model_name = "solar-pro"
+        self.keyword_extract_base_url = "https://api.upstage.ai/v1/solar"
+
         self._chat_instance = None
         self._embedding_instance = None
+        self._solar_pro_client = None
 
     def get_chat_model(self, temperature=0.1) -> ChatUpstage:
         # Singleton 패턴 적용
@@ -34,3 +41,12 @@ class UpstageClient(BaseLLMClient):
                 model=self.embedding_model_name
             )
         return self._embedding_instance
+
+    def get_solar_pro_client(self) -> OpenAI:
+        """키워드 추출을 위한 Upstage Solar Pro 전용 OpenAI 클라이언트를 반환합니다."""
+        if self._solar_pro_client is None:
+            self._solar_pro_client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.keyword_extract_base_url
+            )
+        return self._solar_pro_client

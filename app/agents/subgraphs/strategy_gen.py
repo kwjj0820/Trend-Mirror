@@ -21,11 +21,13 @@ Language: Korean
 
 
 def strategy_gen_node(state: TMState):
+    logger.info("--- (4) Entered Strategy Generation Subgraph ---")
     user_input = state["user_input"]
     reranked = state.get("reranked", [])
 
     # 컨텍스트 조립
     context_str = "\n\n".join([f"- {item['text']}" for item in reranked])
+    logger.info(f"Generating report based on {len(reranked)} context items.")
 
     solar = get_solar_chat()
     messages = [
@@ -33,15 +35,21 @@ def strategy_gen_node(state: TMState):
         HumanMessage(content=f"User Query: {user_input}\n\nContext:\n{context_str}")
     ]
 
-    logger.info("[StrategyGen] Generating report...")
+    logger.info("Calling LLM to write the final report...")
     response = solar.invoke(messages)
     report_content = response.content
+    logger.info("LLM call complete. Report content generated.")
 
     # PDF 생성 Tool 호출
     pdf_filename = f"report_{state.get('slots', {}).get('goal', 'result')}.pdf"
+    logger.info(f"Generating PDF report: {pdf_filename}")
     pdf_path = generate_report_pdf.invoke({"content": report_content, "filename": pdf_filename})
 
-    logger.info(f"[StrategyGen] Report saved at: {pdf_path}")
+    if "Error" in str(pdf_path):
+        logger.error(f"Failed to generate PDF: {pdf_path}")
+    else:
+        logger.info(f"Report saved at: {pdf_path}")
+        logger.info("--- Strategy Generation Subgraph Finished ---")
 
     return {
         "final_answer": report_content,

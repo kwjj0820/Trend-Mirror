@@ -22,4 +22,5 @@ dependencies = [
     "reportlab",    # 노트북에서 PDF 생성용
     "requests",
     "langchain>=1.2.3",
+    "pandas",
 ]
