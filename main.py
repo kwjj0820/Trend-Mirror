@@ -2,6 +2,7 @@
 import uvicorn
 import os
 
+
 def setup_directories():
     """Ensure necessary directories exist."""
     dirs = ["logs", "downloads", "reports", "chroma_tm"]

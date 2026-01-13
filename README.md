@@ -193,7 +193,7 @@ source .venv/bin/activate
 가상 환경이 활성화된 상태에서 다음 명령어를 실행하여 FastAPI 서버를 시작합니다.
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:app --reloaduv 
 ```
 
 - `--reload` 옵션은 코드 변경 시 서버를 자동으로 재시작하여 개발에 유용합니다.
