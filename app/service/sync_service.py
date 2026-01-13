@@ -1,74 +1,117 @@
-# app/service/sync_service.py
 import pandas as pd
-import datetime
 import os
+from datetime import datetime, timedelta
 from app.service.vector_service import VectorService
 from app.core.logger import logger
 
 class SyncService:
     """
-    CSV 파일의 내용을 Vector DB와 동기화하는 비즈니스 로직을 담당하는 서비스
+    특정 형식의 트렌드 분석 CSV 파일을 Vector DB와 동기화하는 서비스
+    - 허용 파일명: (SNS)_(카테고리)_(날짜)_7d_real_data_keyword_frequencies.csv
+    - 정책: 30일 보관, 빈도수 3 이상 적재, Rank 제외
     """
+    
+    # 허용할 파일명의 접미사 (Suffix) 정의
+    REQUIRED_SUFFIX = "_7d_real_data_keyword_frequencies.csv"
+
     def __init__(self, vector_service: VectorService):
         self.vector_service = vector_service
 
     def sync_csv_to_db(self, file_path: str):
-        """
-        CSV 파일의 내용을 분석하여 Vector DB에 최신화(삭제 후 추가)합니다.
-        
-        Args:
-            file_path (str): 분석할 CSV 파일 경로.
-        """
+        """지정한 파일의 이름 형식을 검증하고 데이터를 DB에 적재합니다."""
         base_name = os.path.basename(file_path)
-        parts = base_name.split('_')
-        
-        if len(parts) < 3:
-            logger.error(f"파일명 형식 오류: {base_name} (필수 형식: 카테고리_SNS_... .csv)")
+
+        # 1. 파일명 뒷부분(Suffix) 검증
+        if not base_name.endswith(self.REQUIRED_SUFFIX):
+            logger.error(f"❌ 건너븜: 파일 형식이 일치하지 않습니다. ({base_name})")
+            logger.info(f"💡 필수 형식: [SNS]_[카테고리]_[날짜]{self.REQUIRED_SUFFIX}")
             return
 
-        category = parts[0]
-        sns_name = parts[1]
+        # 2. 파일명에서 정보 추출
+        # 뒷부분 접미사를 제거한 후 '_'로 분리
+        prefix = base_name.replace(self.REQUIRED_SUFFIX, "")
+        parts = prefix.split("_")
+        
+        if len(parts) < 3:
+            logger.error(f"❌ 파일명 정보 부족: {base_name} (SNS, 카테고리, 날짜 정보가 필요합니다)")
+            return
 
-        logger.info(f"🔄 [{category} | {sns_name}] 트렌드 데이터를 DB에 동기화합니다...")
+        sns_name = parts[0]
+        category = parts[1]
+        file_date_str = parts[2]
+
         try:
-            self.vector_service.delete_by_metadata(filter={"$and": [{"category": category}, {"sns": sns_name}]})
-            logger.info(f"기존 '{category}' 카테고리, '{sns_name}' SNS 데이터 삭제 완료.")
+            target_date = datetime.strptime(file_date_str, "%Y%m%d")
+            # 30일 보관 정책을 위한 기준일 계산
+            cutoff_date_int = int((target_date - timedelta(days=30)).strftime("%Y%m%d"))
+            current_date_int = int(file_date_str)
+        except ValueError:
+            logger.error(f"❌ 날짜 형식 오류: {file_date_str} (YYYYMMDD 형식이 아닙니다)")
+            return
+
+        logger.info(f"🔄 [{sns_name} | {category}] 검증 완료. 데이터 분석 시작 (기준일: {file_date_str})")
+
+        # 3. DB 정리 (30일 초과 데이터 삭제 및 동일 날짜 데이터 교체)
+        try:
+            # 오래된 데이터 삭제 ($lt: Less Than)
+            self.vector_service.delete_by_metadata(filter={
+                "$and": [
+                    {"sns": sns_name},
+                    {"category": category},
+                    {"timestamp": {"$lt": cutoff_date_int}}
+                ]
+            })
+            # 중복 방지를 위해 오늘 날짜 데이터 삭제
+            self.vector_service.delete_by_metadata(filter={
+                "$and": [
+                    {"sns": sns_name},
+                    {"category": category},
+                    {"timestamp": current_date_int}
+                ]
+            })
         except Exception as e:
-            logger.warning(f"ℹ️ 이전 데이터 삭제 중 오류가 발생했거나 데이터가 존재하지 않습니다: {e}")
+            logger.debug(f"ℹ️ DB 정리 중 참고사항: {e}")
 
-        df = pd.read_csv(file_path)
+        # 4. CSV 데이터 로드 및 전처리
+        try:
+            # 소문자 keyword, frequency 컬럼 대응
+            df = pd.read_csv(file_path, encoding='utf-8-sig')
+            df.columns = [col.strip().lower() for col in df.columns]
+        except Exception as e:
+            logger.error(f"❌ 파일 읽기 실패: {e}")
+            return
+
+        if 'keyword' not in df.columns or 'frequency' not in df.columns:
+            logger.error(f"❌ 필수 컬럼(keyword, frequency) 누락. 현재 컬럼: {list(df.columns)}")
+            return
+
+        # 5. 데이터 적재 준비 (빈도수 3 이상만)
         documents, metadatas, ids = [], [], []
-        save_time = datetime.datetime.now().isoformat()
+        save_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        df_filtered = df[df['trend_keywords'].notna() & (df['trend_keywords'] != '')]
-
-        for _, row in df_filtered.iterrows():
-            keywords_str = row['trend_keywords']
-            # 쉼표로 구분된 키워드를 분리하고, 각 키워드의 앞뒤 공백을 제거합니다.
-            keywords_list = [k.strip() for k in keywords_str.split(',') if k.strip()]
-
-            # 원본 행의 모든 데이터를 dict 형태로 변환
-            original_data = row.to_dict()
-
-            for kw in keywords_list:
-                doc_text = f"[{sns_name} - {category}] '{row['title']}' 영상에서 언급된 트렌드 키워드: {kw}"
-                documents.append(doc_text)
+        for _, row in df.iterrows():
+            kw = str(row['keyword']).strip()
+            count = int(row['frequency'])
+            
+            if count >= 3:
+                # 자연어 문서 생성 (Rank 제외)
+                doc_text = f"[{sns_name} - {category}] '{kw}' 언급 빈도: {count}회 (기준일: {file_date_str})"
                 
+                documents.append(doc_text)
                 metadatas.append({
                     "sns": sns_name,
                     "category": category,
-                    "keyword": kw,  # 개별 키워드
-                    "updated_at": save_time,
-                    **original_data  # 원본 행의 모든 데이터를 메타데이터에 추가
+                    "keyword": kw,
+                    "count": count,
+                    "timestamp": current_date_int,
+                    "updated_at": save_time
                 })
-                
-                # ID 생성 시 키워드를 포함하여 고유성 보장
-                unique_id_part = row.get('url', row['title'])
-                ids.append(f"{sns_name}_{category}_{unique_id_part}_{kw}")
+                # 고유 ID 생성 (SNS_카테고리_날짜_키워드)
+                ids.append(f"{sns_name}_{category}_{current_date_int}_{kw}")
 
-        if not documents:
-            logger.info("ℹ️ 동기화할 새로운 트렌드 키워드가 없습니다. DB 동기화를 건너뜁니다.")
-            return
-        
-        self.vector_service.add_documents(documents=documents, metadatas=metadatas, ids=ids)
-        logger.info(f"✅ 동기화 완료: {len(documents)}개의 새로운 트렌드 지식이 DB에 저장되었습니다.")
+        # 6. 최종 Vector DB 적재
+        if ids:
+            self.vector_service.add_documents(documents=documents, metadatas=metadatas, ids=ids)
+            logger.info(f"✅ 동기화 완료: {len(ids)}개의 유효 키워드가 DB에 저장되었습니다.")
+        else:
+            logger.warning(f"⚠️ {base_name}에 빈도수 3 이상의 적재할 데이터가 없습니다.")

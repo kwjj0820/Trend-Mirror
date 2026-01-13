@@ -1,4 +1,3 @@
-# app/agents/subgraphs/keyword_extract.py
 import pandas as pd
 import json
 from langgraph.graph import StateGraph, END
@@ -19,7 +18,8 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
         # 1. CSV 및 도메인 정보 읽기
         logger.info("Step KE.1: Loading data and domain from state...")
         csv_path = state.get("csv_path")
-        domain = state.get("slots", {}).get("domain", "any") # 도메인이 없으면 'any'
+        slots = state.get("slots", {})
+        domain = slots.get("domain", "any") # 도메인이 없으면 'any'
 
         if not csv_path or not csv_path.endswith('.csv'):
             return {"error": "Invalid or missing CSV file path."}
@@ -62,23 +62,14 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
             """
             user_prompt = f"아래 영상 정보 리스트를 분석하여 JSON으로 출력해줘.\n\n[영상 정보 리스트]\n{json.dumps(videos_batch, ensure_ascii=False)}"
             
-            logger.debug(f"LLM System Prompt: {system_prompt}")
-            logger.debug(f"LLM User Prompt: {user_prompt}")
-
             try:
                 response = client.chat.completions.create(
                     model=model_name,
                     messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
                     response_format={"type": "json_object"}
                 )
-                logger.debug(f"Raw LLM Response: {response.choices[0].message.content}")
                 parsed_results = json.loads(response.choices[0].message.content).get('results', [])
-                logger.debug(f"Parsed LLM Results: {parsed_results}")
                 return parsed_results
-            except json.JSONDecodeError as json_e:
-                logger.error(f"JSON Decode Error from LLM response: {json_e}")
-                logger.error(f"Faulty LLM Response Content: {response.choices[0].message.content}")
-                return []
             except Exception as api_e:
                 logger.error(f"Upstage API Error during keyword extraction: {api_e}")
                 return []
@@ -98,13 +89,6 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
             all_keywords.extend([""] * (len(df_processed) - len(all_keywords)))
         df_processed['trend_keywords'] = all_keywords[:len(df_processed)]
         logger.info("Keyword extraction via LLM complete.")
-
-        # 키워드 추출 결과의 null/empty 비율 로깅
-        # 'trend_keywords' 컬럼이 비어있거나 (nan), 빈 문자열인 경우를 카운트
-        null_or_empty_keywords = df_processed['trend_keywords'].apply(lambda x: pd.isna(x) or x == '').sum()
-        total_rows = len(df_processed)
-        null_percentage = (null_or_empty_keywords / total_rows) * 100 if total_rows > 0 else 0
-        logger.info(f"Trend Keywords Null/Empty Percentage: {null_percentage:.2f}% ({null_or_empty_keywords}/{total_rows} rows have no keywords)")
 
         # 3. CSV 저장 및 DB 동기화
         logger.info("Step KE.3: Saving results to new CSV file...")
@@ -127,18 +111,19 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
         df_frequencies.to_csv(freq_output_path, index=False, encoding='utf-8-sig')
         logger.info(f"Keyword frequencies saved to '{freq_output_path}'")
         
+        # ⚠️ 중요: Step KE.4 수정 - freq_output_path를 동기화에 사용
         sync_service = config["configurable"].get("sync_service")
         if sync_service:
             logger.info("Step KE.4: Syncing extracted keywords to Vector DB...")
             try:
-                sync_service.sync_csv_to_db(output_path)
+                # 수정된 부분: output_path 대신 freq_output_path 전달
+                sync_service.sync_csv_to_db(freq_output_path)
             except Exception as sync_e:
                 logger.error(f"Failed to sync data to DB: {sync_e}", exc_info=True)
         else:
             logger.warning("SyncService not found in config. Skipping DB sync.")
 
         logger.info(f"Analysis complete! Saved to '{output_path}'")
-        logger.info("\n--- Preview of Results ---\n" + df_processed[['title', 'trend_keywords']].head().to_string())
         logger.info("--- Keyword Extraction Subgraph Finished ---")
 
         return {"output_path": output_path, "error": None}
@@ -147,7 +132,7 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
         logger.error(f"An error occurred in the keyword extraction process: {e}", exc_info=True)
         return {"error": str(e)}
 
-# --- 그래프 구성 (다른 서브그래프와 동일한 구조) ---
+# --- 그래프 구성 ---
 workflow = StateGraph(TMState)
 workflow.add_node("keyword_extraction", keyword_extraction_node)
 workflow.set_entry_point("keyword_extraction")
