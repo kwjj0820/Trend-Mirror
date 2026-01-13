@@ -10,6 +10,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from langchain.tools import tool
 from dotenv import load_dotenv
 import json
+from typing import Dict, Any
 
 from app.agents.subgraphs.keyword_extract import keyword_extraction_graph
 
@@ -146,7 +147,7 @@ def youtube_crawling_tool(query: str, days: int = 30) -> str:
     file_path = f"{out_dir}/youtube_{safe_query}_{days}d_real_data.csv"
 
     try:
-        df = collect_youtube_trend_candidates_df(days=days)
+        df = collect_youtube_trend_candidates_df(query=query, days=days)
         df.to_csv(file_path, index=False, encoding='utf-8-sig')
         return f"유튜브 검색 결과가 다음 경로에 CSV 파일로 저장되었습니다: {file_path}"
     except Exception as e:
@@ -154,10 +155,10 @@ def youtube_crawling_tool(query: str, days: int = 30) -> str:
 
 
 @tool
-def run_keyword_extraction(csv_path: str) -> str:
+def run_keyword_extraction(csv_path: str, slots: Dict[str, Any]) -> str:
     """
     주어진 CSV 파일 경로에 대해 키워드 추출 워크플로우를 실행합니다.
-    입력: CSV 파일 경로 (예: 'downloads/youtube_dummy_data.csv')
+    입력: CSV 파일 경로 (예: 'downloads/youtube_dummy_data.csv'), slots (사용자 의도에서 추출된 슬롯 정보)
     출력: 처리 결과 메시지 (성공 시 결과 파일 경로 포함)
     """
     if not isinstance(csv_path, str) or not csv_path.endswith('.csv'):
@@ -175,7 +176,7 @@ def run_keyword_extraction(csv_path: str) -> str:
         return f"오류: 파일이 존재하지 않습니다: {cleaned_path}"
 
     # 컴파일된 그래프를 직접 호출합니다.
-    initial_state = {"csv_path": cleaned_path}
+    initial_state = {"csv_path": cleaned_path, "slots": slots}
     final_state = keyword_extraction_graph.invoke(initial_state)
 
     if final_state.get("error"):

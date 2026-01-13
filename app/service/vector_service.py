@@ -32,3 +32,9 @@ class VectorService:
                     "distance": results["distances"][0][i] if "distances" in results else None,
                 })
         return out
+
+    def delete_by_metadata(self, filter: Dict[str, Any]):
+        """
+        메타데이터 필터를 기반으로 문서를 삭제합니다.
+        """
+        return self.vector_repository.delete(where=filter)

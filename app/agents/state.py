@@ -2,6 +2,7 @@
 from typing import TypedDict, List, Dict, Any, Annotated
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
+from app.service.sync_service import SyncService
 
 # 노트북의 TMState 구조 이식
 class TMState(TypedDict, total=False):

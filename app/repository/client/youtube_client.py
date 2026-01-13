@@ -110,16 +110,19 @@ def trend_score(stats: Dict[str, Any], published_at: str) -> float:
 """
 현재 30일 기준임. 50개씩 페이지 3개
 """
-def collect_youtube_trend_candidates(days=30, per_query=50, pages=3) -> List[Dict[str, Any]]:
-    queries = [
-        "요즘 유행 음식",
-        "요즘 핫한 음식",
-        "신상 먹방",
-        "유행 음식 추천",
-        "핫플 음식",
-        "편의점 신상 먹방",
-        "요즘 유행 디저트",
-    ]
+def collect_youtube_trend_candidates(query: str, days=30, per_query=50, pages=3) -> List[Dict[str, Any]]:
+    if not query:
+        # Fallback to a default query if none is provided
+        queries = ["요즘 유행"]
+    else:
+        # Generate query variations to gather richer results
+        queries = [
+            f"요즘 유행하는 {query}",
+            f"요즘 핫한 {query}",
+            f"{query} 신상",
+            f"{query} 추천",
+            f"핫플 {query}",
+        ]
 
     videos = []
     seen = set()
@@ -141,8 +144,8 @@ def collect_youtube_trend_candidates(days=30, per_query=50, pages=3) -> List[Dic
     videos.sort(key=lambda x: x["score"], reverse=True)
     return videos
 
-def collect_youtube_trend_candidates_df(days=30, per_query=50, pages=3) -> pd.DataFrame:
-    videos = collect_youtube_trend_candidates(days=days, per_query=per_query, pages=pages)
+def collect_youtube_trend_candidates_df(query: str, days=30, per_query=50, pages=3) -> pd.DataFrame:
+    videos = collect_youtube_trend_candidates(query=query, days=days, per_query=per_query, pages=pages)
     df = pd.DataFrame(videos)
 
     preferred = [
