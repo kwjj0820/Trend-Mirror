@@ -4,136 +4,84 @@ TrendMirror는 Upstage AI Lab 부트캠프를 위해 제작된 AI 에이전트 �
 
 ## 🚀 주요 기능
 
--   **트렌드 분석 및 리포트 생성**: 사용자가 궁금해하는 주제(예: "요즘 유행하는 음식")를 입력하면 관련 최신 PDF 문서를 검색, 다운로드 및 분석하여 Markdown 형식의 리포트와 PDF 파일을 생성합니다.
+-   **유튜브 트렌드 분석**: 사용자가 궁금해하는 주제(예: "요즘 유행하는 음식")를 입력하면 관련 최신 유튜브 영상들을 분석하여, 마케팅에 즉시 활용 가능한 핵심 트렌드 키워드를 추출하고 데이터베이스에 저장합니다.
+-   **동적 리포트 생성**: 데이터베이스에 축적된 트렌드 키워드를 바탕으로, 사용자의 특정 요청에 맞춰 최신 정보를 요약하고 비즈니스/마케팅 전략이 포함된 리포트를 생성합니다.
 -   **의도 파악 및 분류**: 사용자의 입력이 트렌드 분석과 관련된 요청인지, 단순한 잡담인지 파악하여 그에 맞는 답변을 제공합니다.
--   **RAG (Retrieval-Augmented Generation)**: Upstage의 Solar LLM과 ChromaDB를 활용하여, 검색된 정보를 바탕으로 신뢰도 높은 답변을 생성합니다.
--   **자동화된 워크플로우**: LangGraph를 기반으로 에이전트들이 유기적으로 협력하여 '의도 파악 → 정보 검색/추출 → 리포트 생성'의 과정을 자동 수행합니다.
+-   **RAG (Retrieval-Augmented Generation)**: Upstage의 Solar LLM과 ChromaDB를 활용하여, 분석된 트렌드 정보를 바탕으로 신뢰도 높은 답변과 리포트를 생성합니다.
+-   **자동화된 워크플로우**: LangGraph를 기반으로 에이전트들이 유기적으로 협력하여 '의도 파악 → 데이터 수집 → 키워드 추출 → DB 동기화 → 리포트 생성'의 과정을 자동 수행합니다.
 
 ## 🤖 워크플로우 (Workflow)
 
-
-
 TrendMirror는 LangGraph를 기반으로 한 자율 에이전트 워크플로우를 통해 사용자의 요청을 처리합니다. 전체 과정은 여러 서브그래프(에이전트)들의 협력으로 이루어지며, 각 단계의 결과에 따라 동적으로 다음 경로가 결정됩니다.
 
-
-
 ```mermaid
+graph TD;
+    Start[사용자 입력] --> StrategyBuild[1. Strategy Build];
+    StrategyBuild --> Router[2. Router];
+    
+    Router --> Chitchat[단순 대화];
+    Router --> CacheHit[DB 조회];
+    Router --> CacheMiss[신규 분석];
 
+    Chitchat --> End[종료];
+    CacheHit --> StrategyGen[4. Strategy Gen];
+    
+    CacheMiss --> YoutubeProcess[3-A. YouTube Process];
+    YoutubeProcess --> KeywordExtract[3-B. Keyword Extract];
+    KeywordExtract --> SyncToDB[3-C. Sync to DB];
+    SyncToDB --> StrategyGen;
 
-
-graph TD
-
-
-
-    A[사용자 입력] --> B{1. Strategy Build};
-
-
-
-    B --> C{2. Router};
-
-
-
-    C --"단순 대화"--> D[종료];
-
-
-
-    C --"캐시 있음"--> F((4. Strategy Gen));
-
-
-
-    C --"캐시 없음"--> E1[3-A. YouTube 크롤링];
-
-
-
-    E1 --> E2[3-B. 키워드 추출];
-
-
-
-    E2 --> F;
-
-
-
-    F --> G[5. 종료];
-
-
-
+    StrategyGen --> End;
 ```
-
-
 
 ---
 
-
-
 ### **1. 전략 수립 (`strategy_build`)**
 
--   **상세 동작**: 사용자의 첫 입력을 LLM(Solar)에 전달하여 요청의 의도를 파악합니다. '트렌드 분석' 요청인지, 아니면 '단순 대화(chitchat)'인지 구분하고, 분석에 필요한 핵심 정보(지역, 기간, 목표 등)를 `slots`으로 추출합니다. 또한, 캐싱을 위한 `cache_key`를 생성합니다.
-
+-   **상세 동작**: 사용자의 첫 입력을 LLM(Solar)에 전달하여 요청의 의도를 파악합니다. '트렌드 분석' 요청인지, 아니면 '단순 대화(chitchat)'인지 구분하고, 분석에 필요한 핵심 정보(지역, 기간, 목표 등)를 `slots`으로 추출합니다. 또한, 캐싱 및 DB 조회를 위한 `cache_key`를 생성합니다.
 -   **파일 출력**: 없음. 모든 결과는 내부 상태(`TMState`)에 저장됩니다.
-
-
 
 ### **2. 분기 처리 (`router`)**
 
--   **상세 동작**: `strategy_build` 단계에서 결정된 `intent` 값에 따라 워크플로우의 다음 경로를 결정하는 분기점입니다.
+-   **상세 동작**: `strategy_build` 단계에서 결정된 `intent` 값과 캐시/DB 조회 결과에 따라 워크플로우의 다음 경로를 결정합니다.
+    -   **단순 대화일 경우**: 즉시 종료하고 미리 정의된 답변을 반환합니다.
+    -   **DB에 관련 정보가 있는 경우 (`CacheHit`)**: 데이터 수집 단계를 건너뛰고, DB에서 조회한 정보를 바탕으로 바로 리포트 생성 단계로 이동합니다.
+    -   **새로운 분석이 필요한 경우 (`CacheMiss`)**: `youtube_process` 서브그래프로 이동하여 데이터 수집 및 분석을 시작합니다.
 
-    -   **단순 대화일 경우**: 바로 워크플로우를 종료하고, 미리 정의된 인사말을 반환합니다.
+### **3. 데이터 처리 및 동기화**
 
-    -   **캐시된 결과가 있는 경우**: 이전에 동일한 요청으로 생성된 결과가 있다면, 데이터 수집 단계를 건너뛰고 바로 리포트 생성 단계로 이동합니다.
+새로운 트렌드 분석 요청 시, 여러 에이전트가 순차적으로 동작하여 데이터를 수집, 분석하고 DB에 저장합니다.
 
-    -   **새로운 분석이 필요한 경우**: `workflow.py`의 라우터 로직에 따라 데이터 처리 에이전트(`youtube_process`)로 이동합니다.
-
--   **파일 출력**: 없음.
-
-
-
-### **3. 데이터 처리 (`youtube_process` & `keyword_extract`)**
-
-`youtube_process` 에이전트는 단일 단계가 아니라, 데이터 수집과 키워드 추출을 순차적으로 관리하는 '중간 관리자' 역할을 합니다.
-
-
-
-#### **3-A. YouTube 크롤링 (`youtube_crawling_tool` 호출)**
-
--   **상세 동작**: `youtube_process` 에이전트 내에서 가장 먼저 실행됩니다. 사용자 요청(`slots`)을 기반으로 `youtube_crawling_tool`을 호출하여 관련 유튜브 영상 정보를 크롤링합니다.
-
--   **파일 출력**: 크롤링 결과가 임시 **CSV 파일**로 생성됩니다. (예: `.../data/youtube_trend_candidates.csv`)
-
-
-
-#### **3-B. 키워드 추출 (`keyword_extract` 서브그래프 호출)**
-
+#### **3-A. 유튜브 데이터 처리 (`youtube_process`)**
 -   **상세 동작**:
+    1.  사용자 요청(`slots`)을 기반으로 `youtube_crawling_tool`을 호출하여 관련 유튜브 영상 정보를 크롤링합니다.
+    2.  크롤링 결과를 `downloads/` 폴더에 CSV 파일로 저장합니다.
+    3.  다음 단계인 `keyword_extract`를 호출하며 CSV 파일 경로를 전달합니다.
+-   **파일 출력**: `downloads/youtube_{query}_{days}d_real_data.csv`
 
-    1.	앞서 생성된 크롤링 결과 CSV 파일을 읽어옵니다.
+#### **3-B. 트렌드 키워드 추출 (`keyword_extract`)**
+-   **상세 동작**:
+    1.  앞서 생성된 크롤링 결과 CSV 파일을 읽어옵니다.
+    2.  영상 제목과 설명을 '유튜브 바이럴 트렌드 분석가' 역할을 하는 LLM(solar-pro)에 전달하여, 마케팅에 적합한 구체적인 트렌드 키워드(신조어, 고유명사 등)를 추출합니다.
+    3.  추출된 키워드를 원본 데이터에 `trend_keywords`라는 새 컬럼으로 추가하여 새로운 CSV 파일을 생성합니다.
+-   **파일 출력**: `downloads/..._with_keywords.csv`
 
-    2.	영상 제목들을 '유튜브 바이럴 트렌드 분석가' 역할을 하는 LLM(solar-pro)에 전달하여, 마케팅에 적합한 구체적인 트렌드 키워드(신조어, 고유명사 등)를 추출합니다.
-
-    3.	추출된 키워드를 원본 데이터에 `trend_keywords`라는 새 컬럼으로 추가합니다.
-
--   **파일 출력**: 키워드가 추가된 **새로운 CSV 파일**을 생성합니다. (예: `..._with_keywords.csv`)
-
-
-
-*(참고: `insight_extract` 에이전트는 현재 라우팅 로직상 호출되지 않는 대체 데이터 처리 경로입니다. 이 에이전트는 기존 벡터 DB에서 정보를 검색하는 역할을 합니다.)*
-
-
+#### **3-C. 벡터 DB 동기화 (`SyncService` 호출)**
+-   **상세 동작**: `keyword_extract` 서브그래프의 마지막 단계에서 `SyncService`를 호출합니다.
+    1.  키워드가 추가된 CSV 파일의 내용을 분석합니다.
+    2.  파일 이름(`음식_youtube_...`)을 파싱하여 `category`와 `sns` 메타데이터를 추출합니다.
+    3.  해당 `category`와 `sns`에 해당하는 기존 데이터를 벡터 DB에서 **삭제**합니다.
+    4.  영상 제목, 설명, 추출된 키워드 등 모든 정보를 포함하여 새로운 문서를 생성하고 벡터 DB에 **추가**합니다. 이를 통해 DB는 항상 최신 트렌드 정보를 유지합니다.
+-   **파일 출력**: 없음. (DB 상태 변경)
 
 ### **4. 최종 리포트 생성 (`strategy_gen`)**
 
 -   **상세 동작**:
-
-    1.	이전 데이터 처리 단계(`keyword_extract`)에서 최종적으로 생성된 데이터를 컨텍스트로 사용합니다.
-
-    2.	LLM(Solar)에 이 컨텍스트와 함께 최종 리포트 생성을 요청합니다. 리포트는 요약, 핵심 트렌드, 전략 제안, 결론 등을 포함한 마크다운 형식으로 작성됩니다.
-
-    3.	생성된 마크다운 내용을 `generate_report_pdf` 도구에 전달하여 최종 PDF 파일로 변환합니다.
-
+    1.  `CacheMiss` 경로를 거친 경우, `keyword_extract`의 최종 결과물을 컨텍스트로 사용합니다. `CacheHit`의 경우, DB에서 조회한 데이터를 사용합니다.
+    2.  LLM(Solar)에 이 컨텍스트와 함께 최종 리포트 생성을 요청합니다. 리포트는 요약, 핵심 트렌드, 전략 제안, 결론 등을 포함한 마크다운 형식으로 작성됩니다.
+    3.  생성된 마크다운 내용을 `generate_report_pdf` 도구에 전달하여 최종 PDF 파일로 변환합니다.
 -   **파일 출력**:
-
     -   `reports/` 디렉토리에 최종 분석 결과가 담긴 **PDF 파일**이 `report_{요청 주제}.pdf` 형식으로 저장됩니다.
-
-
 
 ### **5. 종료 (`END`)**
 
@@ -154,6 +102,7 @@ graph TD
 
 ```.env
 UPSTAGE_API_KEY="YOUR_UPSTAGE_API_KEY"
+YOUTUBE_API_KEY="YOUR_YOUTUBE_API_KEY"
 ```
 
 ### 3. 가상 환경 생성 및 종속성 설치
@@ -249,12 +198,13 @@ C:/Users/kwjj0/Trend-Mirror/
 
 -   `workflow.py`: LangGraph를 사용하여 전체 에이전트 워크플로우(그래프)를 정의하고 컴파일합니다.
 -   `state.py`: 워크플로우의 각 단계 간에 데이터를 전달하는 데 사용되는 공유 상태(`TMState`)를 정의합니다.
--   `tools.py`: 에이전트가 사용하는 도구(PDF 다운로드, 문서 파싱, 리포트 생성 등)를 정의합니다. `@tool` 데코레이터를 사용하여 LangChain 도구로 만듭니다.
+-   `tools.py`: 에이전트가 사용하는 핵심 도구(`youtube_crawling_tool`, `generate_report_pdf` 등)와 다른 서브그래프를 호출하는 브릿지 도구(`run_keyword_extraction`)를 정의합니다.
 -   `utils.py`: JSON 파싱, 토큰 수 계산 등 워크플로우 전반에서 사용되는 유틸리티 함수들을 포함합니다.
 -   **`app/agents/subgraphs/`**: 각 에이전트의 구체적인 로직을 포함하는 서브그래프들입니다.
     -   `strategy_build.py`: 사용자의 입력을 분석하여 의도(`intent`)와 주요 정보(`slots`)를 추출합니다.
-    -   `insight_extract.py`: `strategy_build`에서 추출된 정보를 바탕으로 웹에서 관련 문서를 검색, 다운로드하고 RAG를 위한 데이터베이스를 구축합니다.
-    -   `strategy_gen.py`: `insight_extract`에서 처리된 데이터를 바탕으로 최종 트렌드 리포트를 생성하고 PDF로 저장합니다.
+    -   `youtube_process.py`: 유튜브 데이터 크롤링부터 키워드 추출까지의 과정을 관장하는 상위 서브그래프입니다.
+    -   `keyword_extract.py`: LLM을 이용해 영상 제목/설명에서 실제 트렌드 키워드를 추출하고, 결과를 DB에 동기화하도록 `SyncService`를 호출합니다.
+    -   `strategy_gen.py`: 분석된 데이터(DB 조회 결과 또는 실시간 분석 결과)를 바탕으로 최종 리포트를 생성합니다.
 
 #### `app/api/`
 
@@ -281,6 +231,7 @@ C:/Users/kwjj0/Trend-Mirror/
 
 -   `agent_service.py`: 에이전트 워크플로우를 실행하고 그 결과를 반환하는 비즈니스 로직을 담당합니다.
 -   `embedding_service.py`: 텍스트를 벡터로 변환하는 임베딩 생성 로직을 담당합니다.
+-   `sync_service.py`: CSV 파일의 내용을 분석하여 벡터 DB에 최신 상태로 동기화(기존 정보 삭제 후 신규 정보 추가)하는 로직을 담당합니다.
 -   `vector_service.py`: `ChromaDBRepository`와 `EmbeddingService`를 사용하여 문서 저장 및 검색과 관련된 비즈니스 로직을 처리합니다.
 
 ### 기타 디렉토리
@@ -290,6 +241,7 @@ C:/Users/kwjj0/Trend-Mirror/
 -   `logs/`: 날짜별로 에이전트 실행 로그가 저장되는 디렉토리입니다.
 -   `reports/`: 생성된 최종 PDF 리포트가 저장되는 디렉토리입니다.
 
+<<<<<<<<< Temporary merge branch 1
 ## ⚙️ 실행 방법
 
 ### 1. 환경 설정
@@ -301,21 +253,15 @@ UPSTAGE_API_KEY="YOUR_UPSTAGE_API_KEY"
 SERPER_API_KEY="YOUR_SERPER_API_KEY"
 ```
 
-### 2. 의존성 설치
+### 2. 서버 실행
 
 `pyproject.toml` 파일이 있는 루트 디렉토리에서 다음 명령어를 실행하여 필요한 라이브러리를 설치합니다. `uv` 와 같은 가상환경 및 패키지 관리 도구 사용을 권장합니다.
 
 ```bash
-uv sync
+uv run main
 ```
 
-### 3. 서버 실행
-
-가상환경이 활성화된 상태에서, 다음 명령어를 실행하여 FastAPI 서버를 시작합니다.
-필요한 디렉토리(logs, downloads 등)는 서버 시작 시 자동으로 생성됩니다.
-
-```bash
-python main.py
-```
 
 서버가 정상적으로 실행되면, `http://localhost:8000/docs` 에서 API 문서를 확인할 수 있습니다.
+=========
+>>>>>>>>> Temporary merge branch 2

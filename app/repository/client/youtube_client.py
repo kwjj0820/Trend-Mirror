@@ -127,8 +127,8 @@ def collect_youtube_trend_candidates(days=30, per_query=50, pages=3) -> List[Dic
     videos.sort(key=lambda x: x["score"], reverse=True)
     return videos
 
-def collect_youtube_trend_candidates_df(days=30, per_query=50, pages=3) -> pd.DataFrame:
-    videos = collect_youtube_trend_candidates(days=days, per_query=per_query, pages=pages)
+def collect_youtube_trend_candidates_df(query: str, days=30, per_query=50, pages=3) -> pd.DataFrame:
+    videos = collect_youtube_trend_candidates(query=query, days=days, per_query=per_query, pages=pages)
     df = pd.DataFrame(videos)
 
     preferred = ["score","video_id","title","channel_title","published_at",

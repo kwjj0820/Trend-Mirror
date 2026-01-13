@@ -1,6 +1,7 @@
 # app/agents/subgraphs/youtube_process.py
 from langgraph.graph import StateGraph, END
 from app.agents.state import TMState
+from app.agents.subgraphs.youtube_collect import youtube_collect_node
 from app.agents.tools import youtube_crawling_tool, run_keyword_extraction
 from app.core.logger import logger
 import re
