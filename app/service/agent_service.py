@@ -4,7 +4,7 @@ from langchain_core.messages import HumanMessage
 from app.agents.workflow import super_graph
 from app.service.vector_service import VectorService
 from app.service.sync_service import SyncService
-
+import traceback # Import traceback for debugging
 
 class AgentService:
     def __init__(self, vector_service: VectorService, sync_service: SyncService):
@@ -41,9 +41,11 @@ class AgentService:
                 "logs": result.get("logs", [])
             }
         except Exception as e:
+            print(f"!!! CRITICAL ERROR in AgentService.run_agent: {e}")
+            traceback.print_exc() # Print full traceback to console for debugging
             return {
                 "answer": f"에러가 발생했습니다: {str(e)}",
                 "pdf_path": None,
                 "status": "fail",
-                "logs": [str(e)]
+                "logs": [f"오류: {str(e)}", "자세한 내용은 서버 콘솔 로그를 확인하세요."]
             }

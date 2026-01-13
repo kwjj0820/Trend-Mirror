@@ -26,8 +26,11 @@ def youtube_process_node(state: TMState, config: RunnableConfig) -> dict:
     else:
         # 1. 유튜브 데이터 크롤링
         logger.info("Step YT.1: Calling youtube_crawling_tool...")
-        query = state.get("slots", {}).get("goal", user_input)
-        crawl_result_str = youtube_crawling_tool.invoke({"query": query})
+        domain = state.get("slots", {}).get("domain", "N/A")
+        crawling_query = state.get("slots", {}).get("search_query", user_input)
+        logger.info(f"Domain for extraction: '{domain}', Crawling Query: '{crawling_query}' (from slots['search_query'])")
+        
+        crawl_result_str = youtube_crawling_tool.invoke({"query": crawling_query})
         logger.info(f"Crawling tool returned: {crawl_result_str}")
 
     # Tool 결과에서 CSV 경로 추출

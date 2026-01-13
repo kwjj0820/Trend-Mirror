@@ -1,7 +1,8 @@
 # app/repository/vector/vector_repo.py
 from typing import List, Dict, Any
 from app.core.db import ChromaDBConnection
-
+from app.core.logger import logger # Import logger
+import uuid # Import uuid
 
 class ChromaDBRepository:
     def __init__(self, collection_name: str = "trendmirror_kb"):
@@ -38,3 +39,21 @@ class ChromaDBRepository:
         메타데이터 필터를 기반으로 DB에서 문서를 삭제합니다.
         """
         return self.collection.delete(where=where)
+
+    def get_by_metadata(self, where: Dict[str, Any], include: List[str] = None) -> Dict[str, Any]:
+        """
+        메타데이터 필터를 기반으로 문서를 검색합니다 (임베딩 검색 아님).
+        """
+        if not self.collection:
+            logger.error("ChromaDB collection is not initialized.")
+            return {}
+        
+        try:
+            results = self.collection.get(
+                where=where,
+                include=include if include else ['documents', 'metadatas', 'ids']
+            )
+            return results
+        except Exception as e:
+            logger.error(f"Error getting from ChromaDB by metadata: {e}", exc_info=True)
+            return {}
