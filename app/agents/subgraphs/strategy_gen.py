@@ -10,12 +10,22 @@ import datetime # Import datetime
 import json # Import json
 
 # 새로운 목표에 맞춘 시스템 프롬프트
-GEN_SYSTEM_PROMPT = """You are a helpful assistant who summarizes the provided context into a simple report.
-Based on the 'Context' below, create a concise summary of the key trends.
-Do not add any information that is not in the context.
+GEN_SYSTEM_PROMPT = """You are a Senior Market Trend Analyst specialized in data-driven reporting. 
+Your goal is to synthesize the provided context into a professional trend report.
 
-Format: Markdown
-Language: Korean
+[CRITICAL: ANTI-HALLUCINATION RULES]
+1. DO NOT fabricate meanings for abbreviations or neologisms (e.g., "Dujjonku").
+2. CROSS-REFERENCE: Look for full names in the provided 'Context' (titles/descriptions). If "Dujjonku" appears in the same context as "Dubai Jjondeuk Cookie", treat it as an abbreviation.
+3. If no clear evidence is found in the Context, explicitly state: "Information regarding this keyword is insufficient for a definitive definition."
+
+[REPORT STRUCTURE]
+- Executive Summary: A high-level overview of the trend.
+- Deep Dive: Detailed analysis of top keywords and their market context.
+- Consumer Demographic Analysis: Logically infer target age groups (e.g., 10s-20s for Shorts/Challenges, 20s-40s for detailed reviews or home-cafe recipes).
+- Action Plan: Strategic suggestions for marketing or business.
+
+Language: Korean (Translate your analysis into natural, professional Korean)
+Format: Structured Markdown
 """
 
 def strategy_gen_node(state: TMState, config: RunnableConfig):
@@ -29,31 +39,31 @@ def strategy_gen_node(state: TMState, config: RunnableConfig):
 
     user_input = state["user_input"]
     slots = state.get("slots", {})
-    domain = slots.get('domain', user_input) # 기존 goal 대신 domain 사용
-    sns = "youtube" # 현재는 youtube로 가정, 필요시 확장 가능
+    category = slots.get('search_query', user_input) # DB category로 사용될 'search_query'
+    sns = "youtube" # 현재는 youtube로 가정
     
-    logger.info(f"Report generation for Domain: '{domain}'")
+    logger.info(f"Report generation for Category: '{category}'")
 
     # 2. Vector DB에서 키워드 빈도수 기반 상위 키워드 조회
     top_keywords_n = 5
-    top_keywords_data = vector_service.get_keyword_frequencies(category=domain, sns=sns, n_results=top_keywords_n)
+    top_keywords_data = vector_service.get_keyword_frequencies(category=category, sns=sns, n_results=top_keywords_n)
     top_keywords = [item['keyword'] for item in top_keywords_data]
-    logger.info(f"Retrieved top {top_keywords_n} keywords for '{domain}' from DB: {top_keywords}")
+    logger.info(f"Retrieved top {top_keywords_n} keywords for '{category}' from DB: {top_keywords}")
 
     # 3. 상위 키워드를 활용하여 상세 정보 검색 쿼리 구성
     if top_keywords:
         # 상위 키워드를 포함하여 더 집중된 검색 쿼리 생성
-        retrieval_query = f"{domain}의 주요 트렌드 키워드는 {', '.join(top_keywords)}입니다. 이 키워드들과 관련된 상세 영상 내용을 요약해주세요."
+        retrieval_query = f"{category}의 주요 트렌드 키워드는 {', '.join(top_keywords)}입니다. 이 키워드들과 관련된 상세 영상 내용을 요약해주세요."
     else:
-        # 상위 키워드를 찾지 못한 경우, 원본 사용자 입력 또는 도메인으로 대체
+        # 상위 키워드를 찾지 못한 경우, 원본 사용자 입력 또는 카테고리로 대체
         retrieval_query = user_input
     
     logger.info(f"Using retrieval query for detailed search: '{retrieval_query}'")
 
-    # 4. 구성된 쿼리로 벡터 DB에서 관련 문서 쿼리 (더 많은 결과를 가져와 컨텍스트로 활용)
+    # 4. 구성된 쿼리로 벡터 DB에서 관련 문서 쿼리
     search_n_results = 10
     try:
-        retrieved_docs = vector_service.search(query=retrieval_query, n_results=search_n_results) # 더 많은 문서를 가져와 풍부한 컨텍스트 생성
+        retrieved_docs = vector_service.search(query=retrieval_query, n_results=search_n_results)
         logger.info(f"Retrieved {len(retrieved_docs)} detailed documents from Vector DB using n_results={search_n_results}.")
     except Exception as e:
         logger.error(f"Failed to query Vector DB: {e}", exc_info=True)
@@ -65,47 +75,59 @@ def strategy_gen_node(state: TMState, config: RunnableConfig):
     # 5. 컨텍스트 조립 및 LLM 호출
     context_str = ""
     if top_keywords:
-        context_str += f"## 주요 트렌드 키워드 (빈도 기반 상위 5개):\n- {', '.join(top_keywords)}\n\n"
+        context_str += f"## 주요 트렌드 키워드 (빈도 기반 상위 {top_keywords_n}개):\n- {', '.join(top_keywords)}\n\n"
     
     if retrieved_docs:
         context_str += "## 관련 영상 상세 내용:\n"
+        # 참고: search 결과의 meta는 dict. get()으로 안전하게 접근
         for doc in retrieved_docs:
-            context_str += f"- [키워드: {doc['meta'].get('keyword', 'N/A')}] 제목: '{doc['meta'].get('title', 'N/A')}', 설명: '{doc['meta'].get('description', 'N/A')}'\n"
-    
-    solar = get_solar_chat()
-    messages = [
-        SystemMessage(content=GEN_SYSTEM_PROMPT),
-        HumanMessage(content=f"Original Request: {user_input}\n\nContext:\n{context_str}\n\n위 컨텍스트를 바탕으로 '{domain}'에 대한 종합적인 트렌드 분석 보고서를 작성해 주세요.")
-    ]
+            meta = doc.get('meta', {})
+            context_str += f"- [키워드: {meta.get('keyword', 'N/A')}] (내용: {doc.get('text', '')})\n"
 
-    logger.info("Calling LLM to write the final report...")
-    response = solar.invoke(messages)
-    report_content = response.content
-    logger.info("LLM call complete. Report content generated.")
+        solar = get_solar_chat()
+        messages = [
+            SystemMessage(content=GEN_SYSTEM_PROMPT),
+            HumanMessage(content=f"""
+    [User Request]
+    "{user_input}"
 
-    # PDF 생성 Tool 호출
-    current_date = datetime.datetime.now().strftime("%Y%m%d")
-    # goal 대신 domain을 사용하며, 날짜를 포함시킵니다.
-    domain_name = slots.get('domain', 'result')
-    pdf_filename = f"report_{domain_name}_{current_date}.pdf"
-    logger.info(f"Generating PDF report: {pdf_filename}")
-    
-    # generate_report_pdf는 @tool로 감싸져 있으므로 직접 호출 대신 .invoke() 사용 고려
-    # tools.py의 구현을 직접 참조하여 로직 실행
-    from app.agents.tools import generate_report_pdf
-    pdf_path = generate_report_pdf.invoke({"content": report_content, "filename": pdf_filename})
+    [Target Domain]
+    {category}
 
-    if "Error" in str(pdf_path):
-        logger.error(f"Failed to generate PDF: {pdf_path}")
-    else:
-        logger.info(f"Report saved at: {pdf_path}")
-        
-    logger.info("--- Strategy Generation Subgraph Finished ---")
+    [Provided Context]
+    {context_str}
 
-    return {
-        "final_answer": report_content,
-        "final_pdf_path": str(pdf_path)
-    }
+    [Final Instruction]
+    1. Based on the Context, decode any slang or abbreviations by cross-referencing titles and descriptions. (e.g., If 'Dujjonku' and 'Dubai Jjondeuk Cookie' appear together, connect them.)
+    2. Analyze the 'Target Age Group' for each key trend. Provide logical reasoning based on content format (Shorts vs. Long-form) and topic.
+    3. Generate a comprehensive trend report in Korean.
+    """)
+        ]
+
+        logger.info("Calling LLM to write the final report...")
+        response = solar.invoke(messages)
+        report_content = response.content
+        logger.info("LLM call complete. Report content generated.")
+
+        # 6. PDF 생성 Tool 호출
+        current_date = datetime.datetime.now().strftime("%Y%m%d")
+        domain_name = slots.get('domain', 'result')
+        pdf_filename = f"report_{domain_name}_{current_date}.pdf"
+
+        from app.agents.tools import generate_report_pdf
+        pdf_path = generate_report_pdf.invoke({"content": report_content, "filename": pdf_filename})
+
+        if "Error" in str(pdf_path):
+            logger.error(f"Failed to generate PDF: {pdf_path}")
+        else:
+            logger.info(f"Report saved at: {pdf_path}")
+
+        logger.info("--- Strategy Generation Subgraph Finished ---")
+
+        return {
+            "final_answer": report_content,
+            "final_pdf_path": str(pdf_path)
+        }
 
 
 # 그래프 구성

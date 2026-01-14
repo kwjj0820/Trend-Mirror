@@ -186,7 +186,7 @@ def main(
 ):
     data_dir = _data_dir()
     youtube_csv = youtube_csv or (data_dir / "youtube_trend_candidates.csv")
-    naver_csv = naver_csv or (data_dir / "naver_blog_food_candidates_7d.csv")
+    naver_csv = naver_csv or (data_dir / "naver_blog_food_candidates_30d.csv")
 
     if not youtube_csv.exists():
         raise FileNotFoundError(f"유튜브 CSV 없음: {youtube_csv}")
@@ -208,8 +208,8 @@ def main(
 
     # 4) 결과 저장
     out_kw = data_dir / "youtube_trend_keywords_simple.csv"
-    out_labeled = data_dir / "naver_blog_posts_7d_labeled.csv"
-    out_stats = data_dir / "naver_blog_keyword_stats_7d.csv"
+    out_labeled = data_dir / "naver_blog_posts_30d_labeled.csv"
+    out_stats = data_dir / "naver_blog_keyword_stats_30d.csv"
 
     kw_df.to_csv(out_kw, index=False, encoding="utf-8-sig")
     labeled.to_csv(out_labeled, index=False, encoding="utf-8-sig")

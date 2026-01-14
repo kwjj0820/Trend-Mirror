@@ -56,12 +56,12 @@ class VectorService:
 
         keyword_counts = {}
         if results and results['metadatas']:
-            for metadata_list in results['metadatas']:
-                for meta in metadata_list:
-                    keyword = meta.get("keyword")
-                    if keyword:
-                        keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
+            for meta in results['metadatas']:
+                keyword = meta.get("keyword")
+                count = meta.get("count", 0)
+                if keyword:
+                    keyword_counts[keyword] = keyword_counts.get(keyword, 0) + count
         
-        # 빈도수 기준으로 정렬
+        # 빈도수 기준으로 정렬 후 n_results 만큼만 반환
         sorted_keywords = sorted(keyword_counts.items(), key=lambda item: item[1], reverse=True)
-        return [{"keyword": kw, "frequency": count} for kw, count in sorted_keywords]
+        return [{"keyword": kw, "frequency": count} for kw, count in sorted_keywords[:n_results]]

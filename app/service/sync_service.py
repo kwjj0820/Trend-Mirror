@@ -12,7 +12,7 @@ class SyncService:
     """
     
     # 허용할 파일명의 접미사 (Suffix) 정의
-    REQUIRED_SUFFIX = "_7d_real_data_keyword_frequencies.csv"
+    REQUIRED_SUFFIX = "_30d_real_data_keyword_frequencies.csv"
 
     def __init__(self, vector_service: VectorService):
         self.vector_service = vector_service

@@ -56,6 +56,21 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
             3. **불필요한 단어 제거**: '브이로그', '추천', '영상', '리뷰', 'ㅋㅋㅋ', '존맛' 같은 일반적인 수식어나 감탄사는 제외하세요.
             4. **맥락 파악**: 제목이나 설명이 특정 챌린지나 밈(Meme)을 다룬다면 해당 밈의 이름을 정확히 추출하세요 (예: '꽁꽁 얼어붙은 한강').
 
+            [상위 개념 추출 원칙]
+            1. **카테고리화**: 여러 개의 구체적인 키워드가 하나의 상위 카테고리(예: 게임, 영화, 브랜드, 특정 음식 종류)에 속할 경우, 해당 상위 카테고리 이름도 키워드로 함께 추출하세요.
+                - **예시 1**: 영상에서 '테란', '저그'와 같은 키워드가 발견되면, '스타크래프트'도 키워드로 추가하세요.
+                - **예시 2**: '다리우스', '페이커' 같은 단어가 나오면 '리그오브레전드'를 추가하세요.
+                - **예시 3**: '로제떡볶이', '마라떡볶이'가 나오면 '떡볶이'를 추가하여 더 넓은 트렌드를 파악할 수 있도록 하세요.
+            2. **목적**: 이 원칙은 개별 아이템뿐만 아니라, 그 아이템들이 형성하는 더 큰 트렌드나 맥락을 포착하기 위함입니다.
+
+            [키워드 정규화 원칙]
+            1. **표준 형태로 통일 (Normalization)**: 의미적으로 동일한 대상에 대한 다양한 표현을 **가장 대표적인 한글 명칭**으로 통일하세요.
+                - **축약어 -> 원형**: '두쫀쿠'는 '두바이쫀득쿠키'로 변환하세요.
+                - **오타 수정**: '두바이쫀듯쿠키'와 같은 명백한 오타는 '두바이쫀득쿠키'로 교정하세요.
+                - **외래어/외국어 표기 통일**: 'tanghulu'나 다른 표기는 '탕후루'로 통일하세요.
+            2. **띄어쓰기 제거**: 최종 키워드에서는 모든 띄어쓰기를 제거하세요. (예: '두바이 쫀득 쿠키'는 '두바이쫀득쿠키'가 되어야 합니다.)
+            3. **최종 일관성**: 위의 원칙에 따라, '두쫀쿠', '두바이 쫀득 쿠키', '두바이쫀듯쿠키' 등은 모두 '두바이쫀득쿠키'라는 단 하나의 키워드로 출력되어야 합니다.
+
             [출력 형식]
             반드시 JSON 형식으로 반환하세요:
             {{ "results": [ {{"title": "원본 제목", "keywords": ["키워드1", "키워드2"]}} ] }}
@@ -99,7 +114,10 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
         # 키워드 빈도수 카운팅 및 CSV 저장
         all_extracted_keywords = []
         for keywords_str in df_processed['trend_keywords'].dropna():
-            all_extracted_keywords.extend([kw.strip() for kw in keywords_str.split(',') if kw.strip()])
+            # 한 행(영상) 내에서 중복된 키워드는 한 번만 카운트하기 위해 set으로 변환 후 추가
+            keywords_in_row = [kw.strip().replace(' ', '') for kw in keywords_str.split(',') if kw.strip()]
+            unique_keywords_in_row = set(keywords_in_row)
+            all_extracted_keywords.extend(list(unique_keywords_in_row))
         
         from collections import Counter
         keyword_counts = Counter(all_extracted_keywords)

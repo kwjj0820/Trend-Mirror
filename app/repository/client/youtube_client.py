@@ -20,7 +20,7 @@ def _get(url: str, params: dict, timeout=30, retries=3):
         return r
     return r
 
-def yt_search(query: str, max_results: int = 50, days: int = 7, pages: int = 1) -> List[Dict[str, Any]]:
+def yt_search(query: str, max_results: int = 50, days: int = 30, pages: int = 1) -> List[Dict[str, Any]]:
     
     published_after = (datetime.datetime.utcnow() - datetime.timedelta(days=days)).isoformat("T") + "Z"
 
@@ -38,7 +38,7 @@ def yt_search(query: str, max_results: int = 50, days: int = 7, pages: int = 1) 
             "relevanceLanguage": "ko",
             "regionCode": "KR",
             "safeSearch": "none",
-            # "order": "viewCount",
+            "order": "date",
         }
         if page_token:
             params["pageToken"] = page_token
@@ -110,7 +110,7 @@ def trend_score(stats: Dict[str, Any], published_at: str) -> float:
 """
 현재 30일 기준임. 50개씩 페이지 3개
 """
-def collect_youtube_trend_candidates(query: str, days=7, per_query=50, pages=3) -> List[Dict[str, Any]]:
+def collect_youtube_trend_candidates(query: str, days=30, per_query=50, pages=1) -> List[Dict[str, Any]]:
     if not query:
         # Fallback to a default query if none is provided
         queries = ["요즘 유행"]
@@ -138,7 +138,7 @@ def collect_youtube_trend_candidates(query: str, days=7, per_query=50, pages=3) 
     videos.sort(key=lambda x: x["score"], reverse=True)
     return videos
 
-def collect_youtube_trend_candidates_df(query: str, days=7, per_query=50, pages=3) -> pd.DataFrame:
+def collect_youtube_trend_candidates_df(query: str, days=30, per_query=50, pages=1) -> pd.DataFrame:
     videos = collect_youtube_trend_candidates(query=query, days=days, per_query=per_query, pages=pages)
     df = pd.DataFrame(videos)
 
@@ -157,7 +157,7 @@ def collect_youtube_trend_candidates_df(query: str, days=7, per_query=50, pages=
     return df
 
 if __name__ == "__main__":
-    df = collect_youtube_trend_candidates_df(days=7, per_query=50, pages=3)
+    df = collect_youtube_trend_candidates_df(days=30, per_query=50, pages=1)
     print(df.head(10))
     data_dir = os.path.join("data")
     os.makedirs(data_dir, exist_ok=True)

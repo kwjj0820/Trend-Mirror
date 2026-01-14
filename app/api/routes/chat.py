@@ -17,8 +17,7 @@ async def chat_endpoint(
     """
     result = agent_service.run_agent(
         user_query=request.query,
-        thread_id=request.thread_id,
-        bypass_crawling=request.bypass_crawling
+        thread_id=request.thread_id
     )
 
     return ChatResponse(

@@ -15,23 +15,15 @@ def youtube_process_node(state: TMState, config: RunnableConfig) -> dict:
     2. 키워드 추출 워크플로우 호출
     """
     logger.info("--- (YT) Entered YouTube Processing Subgraph ---")
+    # 1. 유튜브 데이터 크롤링
+    logger.info("Step YT.1: Calling youtube_crawling_tool...")
     user_input = state.get("user_input", "")
-
-    bypass_crawling = config["configurable"].get("bypass_crawling", False)
-    mock_csv_path = "scripts/food_youtube_analysis.csv" # 임시 우회용 CSV 파일
-
-    if bypass_crawling:
-        logger.warning(f"Step YT.1: Bypassing youtube_crawling_tool. Using mock CSV: {mock_csv_path}")
-        crawl_result_str = f"유튜브 검색 결과가 다음 경로에 CSV 파일로 저장되었습니다: {mock_csv_path}"
-    else:
-        # 1. 유튜브 데이터 크롤링
-        logger.info("Step YT.1: Calling youtube_crawling_tool...")
-        domain = state.get("slots", {}).get("domain", "N/A")
-        crawling_query = state.get("slots", {}).get("search_query", user_input)
-        logger.info(f"Domain for extraction: '{domain}', Crawling Query: '{crawling_query}' (from slots['search_query'])")
-        
-        crawl_result_str = youtube_crawling_tool.invoke({"query": crawling_query})
-        logger.info(f"Crawling tool returned: {crawl_result_str}")
+    domain = state.get("slots", {}).get("domain", "N/A")
+    crawling_query = state.get("slots", {}).get("search_query", user_input)
+    logger.info(f"Domain for extraction: '{domain}', Crawling Query: '{crawling_query}' (from slots['search_query'])")
+    
+    crawl_result_str = youtube_crawling_tool.invoke({"query": crawling_query})
+    logger.info(f"Crawling tool returned: {crawl_result_str}")
 
     # Tool 결과에서 CSV 경로 추출
     try:
