@@ -1,35 +1,35 @@
 INFO:     Will watch for changes in these directories: ['C:\\Users\\ning\\Downloads\\trendmirror\\Trend-Mirror']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [21376] using WatchFiles
-INFO:     Started server process [3472]
+INFO:     Started reloader process [11420] using WatchFiles
+INFO:     Started server process [20268]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     127.0.0.1:10086 - "GET /docs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10086 - "GET /openapi.json HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10099 - "GET /trendmirror HTTP/1.1" 200 OK
-[2026-01-14 14:56:01] [INFO] --- (1) Entered Strategy Builder Subgraph ---
-[2026-01-14 14:56:02] [INFO] Analyzing user input: '요즘 유행하는 게임'
-[2026-01-14 14:56:02] [INFO] Calling LLM to analyze user intent...
-[2026-01-14 14:56:04] [INFO] Intent analysis complete. Parsed parameters: {"intent": "trendmirror", "slots": {"region": "KR", "period_days": 30, "channels": ["Youtube", "Instagram", "Blog"], "domain": "요즘 유행하는 게임", "search_query": "게임"}, "cache_key": "trendmirror_KR_30_Youtube_Instagram_Blog_요즘 유행하는 게임_게임"}
-[2026-01-14 14:56:04] [INFO] --- Strategy Builder Subgraph Finished ---
-[2026-01-14 14:56:04] [INFO] [Router] No cache hit. Routing to YouTube Processing Subgraph.
-[2026-01-14 14:56:04] [INFO] --- (YT) Entered YouTube Processing Subgraph ---
-[2026-01-14 14:56:04] [INFO] Step YT.1: Calling youtube_crawling_tool...
-[2026-01-14 14:56:04] [INFO] Domain for extraction: '요즘 유행하는 게임', Crawling Query: '게임' (from slots['search_query'])
-[2026-01-14 14:56:04] [INFO] youtube_crawling_tool called with query='게임', days='30'
-[2026-01-14 14:56:05] [INFO] Crawling tool returned: 유튜브 검색 결과가 다음 경로에 CSV 파일로 저장되었습니다: downloads/youtube_게임_20260114_30d_real_data.csv
-[2026-01-14 14:56:05] [INFO] Extracted CSV path: downloads/youtube_게임_20260114_30d_real_data.csv
-[2026-01-14 14:56:05] [INFO] Step YT.2: Calling run_keyword_extraction tool...
-[2026-01-14 14:56:05] [INFO] --- (KE) Entered Keyword Extraction Subgraph ---
-[2026-01-14 14:56:05] [INFO] Step KE.1: Loading data and domain from state...
-[2026-01-14 14:56:05] [INFO] Successfully loaded 50 rows. Domain set to '요즘 유행하는 게임'.
-[2026-01-14 14:56:05] [INFO] Step KE.2: Starting domain-specific trend keyword extraction via LLM with batch_size=20...
-  0%|          | 0/3 [00:00<?, ?it/s] 33%|###3      | 1/3 [00:05<00:11,  5.77s/it] 67%|######6   | 2/3 [00:19<00:10, 10.33s/it]100%|##########| 3/3 [00:23<00:00,  7.50s/it]100%|##########| 3/3 [00:23<00:00,  7.80s/it]
-[2026-01-14 14:56:29] [INFO] Keyword extraction via LLM complete.
-[2026-01-14 14:56:29] [INFO] Step KE.3: Saving results to new CSV file...
-[2026-01-14 14:56:29] [INFO] Keyword-extracted data saved to 'downloads/youtube_게임_20260114_30d_real_data_with_keywords.csv'
-[2026-01-14 14:56:29] [INFO] Keyword frequencies saved to 'downloads/youtube_게임_20260114_30d_real_data_keyword_frequencies.csv'
-[2026-01-14 14:56:29] [INFO] Step KE.4: Syncing extracted keywords to Vector DB...
+INFO:     127.0.0.1:11215 - "GET /trendmirror HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11246 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11246 - "GET /openapi.json HTTP/1.1" 200 OK
+[2026-01-14 15:09:56] [INFO] --- (1) Entered Strategy Builder Subgraph ---
+[2026-01-14 15:09:56] [INFO] Analyzing user input: '게임 데이터'
+[2026-01-14 15:09:56] [INFO] Calling LLM to analyze user intent...
+[2026-01-14 15:09:57] [INFO] Intent analysis complete. Parsed parameters: {"intent": "trendmirror", "slots": {"region": "Global", "period_days": 30, "channels": [], "domain": "게임 데이터", "search_query": "게임"}, "cache_key": "trendmirror_게임_데이터_Global_30"}
+[2026-01-14 15:09:57] [INFO] --- Strategy Builder Subgraph Finished ---
+[2026-01-14 15:09:57] [INFO] [Router] No cache hit. Routing to YouTube Processing Subgraph.
+[2026-01-14 15:09:57] [INFO] --- (YT) Entered YouTube Processing Subgraph ---
+[2026-01-14 15:09:57] [INFO] Step YT.1: Calling youtube_crawling_tool...
+[2026-01-14 15:09:57] [INFO] Domain for extraction: '게임 데이터', Crawling Query: '게임' (from slots['search_query'])
+[2026-01-14 15:09:57] [INFO] youtube_crawling_tool called with query='게임', days='30'
+[2026-01-14 15:09:58] [INFO] Crawling tool returned: 유튜브 검색 결과가 다음 경로에 CSV 파일로 저장되었습니다: downloads/youtube_게임_20260114_30d_real_data.csv
+[2026-01-14 15:09:58] [INFO] Extracted CSV path: downloads/youtube_게임_20260114_30d_real_data.csv
+[2026-01-14 15:09:58] [INFO] Step YT.2: Calling run_keyword_extraction tool...
+[2026-01-14 15:09:58] [INFO] --- (KE) Entered Keyword Extraction Subgraph ---
+[2026-01-14 15:09:58] [INFO] Step KE.1: Loading data and domain from state...
+[2026-01-14 15:09:58] [INFO] Successfully loaded 25 rows. Domain set to '게임 데이터'.
+[2026-01-14 15:09:58] [INFO] Step KE.2: Starting domain-specific trend keyword extraction via LLM with batch_size=20...
+  0%|          | 0/2 [00:00<?, ?it/s] 50%|#####     | 1/2 [00:07<00:07,  7.05s/it]100%|##########| 2/2 [00:09<00:00,  4.38s/it]100%|##########| 2/2 [00:09<00:00,  4.78s/it]
+[2026-01-14 15:10:08] [INFO] Keyword extraction via LLM complete.
+[2026-01-14 15:10:08] [INFO] Step KE.3: Saving results to new CSV file...
+[2026-01-14 15:10:08] [INFO] Keyword-extracted data saved to 'downloads/youtube_게임_20260114_30d_real_data_with_keywords.csv'
+[2026-01-14 15:10:08] [INFO] Keyword frequencies saved to 'downloads/youtube_게임_20260114_30d_real_data_keyword_frequencies.csv'
+[2026-01-14 15:10:08] [INFO] Step KE.4: Syncing extracted keywords to Vector DB...
 --- Logging error ---
 Traceback (most recent call last):
   File "C:\Users\ning\AppData\Roaming\uv\python\cpython-3.12.12-windows-x86_64-none\Lib\logging\__init__.py", line 1163, in emit
@@ -266,20 +266,20 @@ Call stack:
     sync_service.sync_csv_to_db(freq_output_path)
   File "C:\Users\ning\Downloads\trendmirror\Trend-Mirror\app\service\sync_service.py", line 115, in sync_csv_to_db
     logger.info(f"\u2705 동기화 완료: {len(ids)}개의 유효 키워드가 DB에 저장되었습니다.")
-Message: '\u2705 동기화 완료: 6개의 유효 키워드가 DB에 저장되었습니다.'
+Message: '\u2705 동기화 완료: 2개의 유효 키워드가 DB에 저장되었습니다.'
 Arguments: ()
-[2026-01-14 14:56:30] [INFO] Analysis complete! Saved to 'downloads/youtube_게임_20260114_30d_real_data_with_keywords.csv'
-[2026-01-14 14:56:30] [INFO] --- Keyword Extraction Subgraph Finished ---
-[2026-01-14 14:56:30] [INFO] Keyword extraction tool returned: {"status": "success", "input_path": "downloads/youtube_게임_20260114_30d_real_data.csv", "output_path": "downloads/youtube_게임_20260114_30d_real_data_with_keywords.csv"}
-[2026-01-14 14:56:30] [INFO] --- YouTube Processing Subgraph Finished ---
-[2026-01-14 14:56:30] [INFO] --- (4) Entered Strategy Generation Subgraph (DB Query) ---
-[2026-01-14 14:56:30] [INFO] Report generation for Category: '게임'
-[2026-01-14 14:56:30] [INFO] Retrieved top 5 keywords for '게임' from DB: ['공포게임', '로블록스', '스팀할인', '스팀게임', '발로란트']
-[2026-01-14 14:56:30] [INFO] Using retrieval query for detailed search: '게임의 주요 트렌드 키워드는 공포게임, 로블록스, 스팀할인, 스팀게임, 발로란트입니다. 이 키워드들과 관련된 상세 영상 내용을 요약해주세요.'
-[2026-01-14 14:56:31] [INFO] Retrieved 10 detailed documents from Vector DB using n_results=10.
-[2026-01-14 14:56:31] [INFO] Calling LLM to write the final report...
-[2026-01-14 14:56:38] [INFO] LLM call complete. Report content generated.
-[2026-01-14 14:56:38] [INFO] generate_report_pdf called with filename='report_요즘 유행하는 게임_20260114.pdf'
-[2026-01-14 14:56:38] [INFO] Report saved at: reports/report_요즘 유행하는 게임_20260114.pdf
-[2026-01-14 14:56:38] [INFO] --- Strategy Generation Subgraph Finished ---
-INFO:     127.0.0.1:10115 - "POST /api/v1/chat HTTP/1.1" 200 OK
+[2026-01-14 15:10:08] [INFO] Analysis complete! Saved to 'downloads/youtube_게임_20260114_30d_real_data_with_keywords.csv'
+[2026-01-14 15:10:08] [INFO] --- Keyword Extraction Subgraph Finished ---
+[2026-01-14 15:10:08] [INFO] Keyword extraction tool returned: {"status": "success", "input_path": "downloads/youtube_게임_20260114_30d_real_data.csv", "output_path": "downloads/youtube_게임_20260114_30d_real_data_with_keywords.csv"}
+[2026-01-14 15:10:08] [INFO] --- YouTube Processing Subgraph Finished ---
+[2026-01-14 15:10:08] [INFO] --- (4) Entered Strategy Generation Subgraph (DB Query) ---
+[2026-01-14 15:10:08] [INFO] Report generation for Category: '게임'
+[2026-01-14 15:10:08] [INFO] Retrieved top 5 keywords for '게임' from DB: ['게임', '로블록스']
+[2026-01-14 15:10:08] [INFO] Using retrieval query for detailed search: '게임의 주요 트렌드 키워드는 게임, 로블록스입니다. 이 키워드들과 관련된 상세 영상 내용을 요약해주세요.'
+[2026-01-14 15:10:09] [INFO] Retrieved 10 detailed documents from Vector DB using n_results=10.
+[2026-01-14 15:10:09] [INFO] Calling LLM to write the final report...
+[2026-01-14 15:10:16] [INFO] LLM call complete. Report content generated.
+[2026-01-14 15:10:16] [INFO] generate_report_pdf called with filename='report_게임 데이터_20260114.pdf'
+[2026-01-14 15:10:16] [INFO] Report saved at: reports/report_게임 데이터_20260114.pdf
+[2026-01-14 15:10:16] [INFO] --- Strategy Generation Subgraph Finished ---
+INFO:     127.0.0.1:11264 - "POST /api/v1/chat HTTP/1.1" 200 OK
