@@ -20,3 +20,7 @@ logs/
 downloads/
 reports/
 chroma_tm/
+app.log
+app.pid
+ui.log
+ui.pid

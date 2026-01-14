@@ -23,8 +23,8 @@ class SyncService:
 
         # 1. 파일명 뒷부분(Suffix) 검증
         if not base_name.endswith(self.REQUIRED_SUFFIX):
-            logger.error(f"❌ 건너븜: 파일 형식이 일치하지 않습니다. ({base_name})")
-            logger.info(f"💡 필수 형식: [SNS]_[카테고리]_[날짜]{self.REQUIRED_SUFFIX}")
+            logger.error(f"[Error] 건너뜀: 파일 형식이 일치하지 않습니다. ({base_name})")
+            logger.info(f"[Info] 필수 형식: [SNS]_[카테고리]_[날짜]{self.REQUIRED_SUFFIX}")
             return
 
         # 2. 파일명에서 정보 추출
@@ -33,7 +33,7 @@ class SyncService:
         parts = prefix.split("_")
         
         if len(parts) < 3:
-            logger.error(f"❌ 파일명 정보 부족: {base_name} (SNS, 카테고리, 날짜 정보가 필요합니다)")
+            logger.error(f"[Error] 파일명 정보 부족: {base_name} (SNS, 카테고리, 날짜 정보가 필요합니다)")
             return
 
         sns_name = parts[0]
@@ -46,10 +46,10 @@ class SyncService:
             cutoff_date_int = int((target_date - timedelta(days=30)).strftime("%Y%m%d"))
             current_date_int = int(file_date_str)
         except ValueError:
-            logger.error(f"❌ 날짜 형식 오류: {file_date_str} (YYYYMMDD 형식이 아닙니다)")
+            logger.error(f"[Error] 날짜 형식 오류: {file_date_str} (YYYYMMDD 형식이 아닙니다)")
             return
 
-        logger.info(f"🔄 [{sns_name} | {category}] 검증 완료. 데이터 분석 시작 (기준일: {file_date_str})")
+        logger.info(f"[Sync] [{sns_name} | {category}] 검증 완료. 데이터 분석 시작 (기준일: {file_date_str})")
 
         # 3. DB 정리 (30일 초과 데이터 삭제 및 동일 날짜 데이터 교체)
         try:
@@ -70,7 +70,7 @@ class SyncService:
                 ]
             })
         except Exception as e:
-            logger.debug(f"ℹ️ DB 정리 중 참고사항: {e}")
+            logger.debug(f"[Info] DB 정리 중 참고사항: {e}")
 
         # 4. CSV 데이터 로드 및 전처리
         try:
@@ -78,11 +78,11 @@ class SyncService:
             df = pd.read_csv(file_path, encoding='utf-8-sig')
             df.columns = [col.strip().lower() for col in df.columns]
         except Exception as e:
-            logger.error(f"❌ 파일 읽기 실패: {e}")
+            logger.error(f"[Error] 파일 읽기 실패: {e}")
             return
 
         if 'keyword' not in df.columns or 'frequency' not in df.columns:
-            logger.error(f"❌ 필수 컬럼(keyword, frequency) 누락. 현재 컬럼: {list(df.columns)}")
+            logger.error(f"[Error] 필수 컬럼(keyword, frequency) 누락. 현재 컬럼: {list(df.columns)}")
             return
 
         # 5. 데이터 적재 준비 (빈도수 3 이상만)
@@ -112,6 +112,6 @@ class SyncService:
         # 6. 최종 Vector DB 적재
         if ids:
             self.vector_service.add_documents(documents=documents, metadatas=metadatas, ids=ids)
-            logger.info(f"✅ 동기화 완료: {len(ids)}개의 유효 키워드가 DB에 저장되었습니다.")
+            logger.info(f"[Success] 동기화 완료: {len(ids)}개의 유효 키워드가 DB에 저장되었습니다.")
         else:
-            logger.warning(f"⚠️ {base_name}에 빈도수 3 이상의 적재할 데이터가 없습니다.")
+            logger.warning(f"[Warning] {base_name}에 빈도수 3 이상의 적재할 데이터가 없습니다.")

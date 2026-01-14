@@ -6,7 +6,6 @@ from app.agents.subgraphs.strategy_build import strategy_build_graph
 from app.agents.subgraphs.insight_extract import insight_extract_graph
 from app.agents.subgraphs.strategy_gen import strategy_gen_graph
 from app.agents.subgraphs.youtube_process import youtube_process_graph
-from app.agents.subgraphs.naver_blog_process import naver_blog_process_graph # 1. 신규 서브그래프 임포트
 from app.core.logger import logger
 
 
@@ -33,7 +32,6 @@ workflow = StateGraph(TMState)
 workflow.add_node("strategy_build", strategy_build_graph)
 workflow.add_node("insight_extract", insight_extract_graph)
 workflow.add_node("youtube_process", youtube_process_graph)
-workflow.add_node("naver_blog_process", naver_blog_process_graph) # 2. 신규 노드 추가
 workflow.add_node("strategy_gen", strategy_gen_graph)
 
 # 흐름 정의
@@ -51,8 +49,7 @@ workflow.add_conditional_edges(
 )
 
 workflow.add_edge("insight_extract", "strategy_gen")
-workflow.add_edge("youtube_process", "naver_blog_process") # 3. youtube -> naver_blog 로 연결 변경
-workflow.add_edge("naver_blog_process", "strategy_gen")   # 4. naver_blog -> strategy_gen 으로 신규 연결
+workflow.add_edge("youtube_process", "strategy_gen") # 3. youtube -> naver_blog 로 연결 변경
 workflow.add_edge("strategy_gen", END)
 
 # 체크포인터 (대화 문맥 기억)
