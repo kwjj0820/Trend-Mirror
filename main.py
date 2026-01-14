@@ -1,7 +1,13 @@
 # main.py
 import uvicorn
 import os
+from fastapi import FastAPI
 
+app = FastAPI()
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
 
 def setup_directories():
     """Ensure necessary directories exist."""

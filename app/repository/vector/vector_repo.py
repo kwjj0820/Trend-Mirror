@@ -32,3 +32,9 @@ class ChromaDBRepository:
             n_results=n_results,
             include=["documents", "metadatas", "distances"]
         )
+
+    def delete(self, where: Dict[str, Any]):
+        """
+        메타데이터 필터를 기반으로 DB에서 문서를 삭제합니다.
+        """
+        return self.collection.delete(where=where)

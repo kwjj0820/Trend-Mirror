@@ -3,27 +3,29 @@ from typing import Dict, Any
 from langchain_core.messages import HumanMessage
 from app.agents.workflow import super_graph
 from app.service.vector_service import VectorService
+from app.service.sync_service import SyncService
 
 
 class AgentService:
-    def __init__(self, vector_service: VectorService):
+    def __init__(self, vector_service: VectorService, sync_service: SyncService):
         self.vector_service = vector_service  # 의존성 주입 받음
+        self.sync_service = sync_service      # DB 동기화 서비스
 
-    def run_agent(self, user_query: str, thread_id: str = "default") -> Dict[str, Any]:
+    def run_agent(self, user_query: str, thread_id: str = "default", bypass_crawling: bool = False) -> Dict[str, Any]:
         # 1. 초기 상태 설정
         initial_state = {
             "user_input": user_query,
             "logs": [],
-            # LangGraph 메시지 히스토리 초기화 (선택적)
-            "messages": [HumanMessage(content=user_query)]
+            "messages": [HumanMessage(content=user_query)],
         }
 
-        # 2. Config 설정 (Graph 내부 노드/툴에 객체 전달)
+        # 2. Config 설정 (Graph 내부 노드/툴에 서비스 객체 및 플래그 전달)
         config = {
             "configurable": {
                 "thread_id": thread_id,
-                # 여기서 주입해야 Tools에서 vector_service를 꺼내 쓸 수 있음
                 "vector_service": self.vector_service,
+                "sync_service": self.sync_service,
+                "bypass_crawling": bypass_crawling,  # 크롤링 우회 플래그
             }
         }
 

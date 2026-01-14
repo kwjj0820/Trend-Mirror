@@ -4,6 +4,7 @@ from app.repository.vector.vector_repo import ChromaDBRepository
 from app.service.embedding_service import EmbeddingService
 from app.service.vector_service import VectorService
 from app.service.agent_service import AgentService
+from app.service.sync_service import SyncService
 
 # 1. Repository & Basic Services
 def get_vector_repository() -> ChromaDBRepository:
@@ -19,8 +20,14 @@ def get_vector_service(
 ) -> VectorService:
     return VectorService(vector_repository=vector_repo, embedding_service=embedding_service)
 
-# 3. AgentService (VectorService 주입) - 최종적으로 API에서 호출
+# 3. Services for Agent
+def get_sync_service(
+    vector_service: VectorService = Depends(get_vector_service),
+) -> SyncService:
+    return SyncService(vector_service=vector_service)
+
 def get_agent_service(
     vector_service: VectorService = Depends(get_vector_service),
+    sync_service: SyncService = Depends(get_sync_service),
 ) -> AgentService:
-    return AgentService(vector_service=vector_service)
+    return AgentService(vector_service=vector_service, sync_service=sync_service)
