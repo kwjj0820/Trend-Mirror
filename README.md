@@ -4,11 +4,10 @@ TrendMirror는 Upstage AI Lab 부트캠프를 위해 제작된 AI 에이전트 �
 
 ## 🚀 주요 기능
 
--   **유튜브 트렌드 분석**: 사용자가 궁금해하는 주제(예: "요즘 유행하는 음식")를 입력하면 관련 최신 유튜브 영상들을 분석하여, 마케팅에 즉시 활용 가능한 핵심 트렌드 키워드를 추출하고 데이터베이스에 저장합니다.
--   **동적 리포트 생성**: 데이터베이스에 축적된 트렌드 키워드를 바탕으로, 사용자의 특정 요청에 맞춰 최신 정보를 요약하고 비즈니스/마케팅 전략이 포함된 리포트를 생성합니다.
+-   **트렌드 분석 및 리포트 생성**: 사용자가 궁금해하는 주제(예: "요즘 유행하는 음식")를 입력하면 관련 최신 PDF 문서를 검색, 다운로드 및 분석하여 Markdown 형식의 리포트와 PDF 파일을 생성합니다.
 -   **의도 파악 및 분류**: 사용자의 입력이 트렌드 분석과 관련된 요청인지, 단순한 잡담인지 파악하여 그에 맞는 답변을 제공합니다.
--   **RAG (Retrieval-Augmented Generation)**: Upstage의 Solar LLM과 ChromaDB를 활용하여, 분석된 트렌드 정보를 바탕으로 신뢰도 높은 답변과 리포트를 생성합니다.
--   **자동화된 워크플로우**: LangGraph를 기반으로 에이전트들이 유기적으로 협력하여 '의도 파악 → 데이터 수집 → 키워드 추출 → DB 동기화 → 리포트 생성'의 과정을 자동 수행합니다.
+-   **RAG (Retrieval-Augmented Generation)**: Upstage의 Solar LLM과 ChromaDB를 활용하여, 검색된 정보를 바탕으로 신뢰도 높은 답변을 생성합니다.
+-   **자동화된 워크플로우**: LangGraph를 기반으로 에이전트들이 유기적으로 협력하여 '의도 파악 → 정보 검색/추출 → 리포트 생성'의 과정을 자동 수행합니다.
 
 ## 🤖 워크플로우 (Workflow)
 
@@ -151,33 +150,48 @@ uvicorn app.main:app --reloaduv
 ## 📁 프로젝트 구조
 
 ```
-C:/Users/kwjj0/Trend-Mirror/
+.
 ├── .gitignore
 ├── main.py
 ├── pyproject.toml
 ├── README.md
-├── uv.lock
-├── .git/
-├── .github/
-│   └── workflows/
-│       └── main.yml
-├── .venv/
-├── app/
+├── app
 │   ├── deps.py
 │   ├── main.py
-│   ├── agents/
-│   ├── api/
-│   ├── core/
-│   ├── models/
-│   ├── repository/
-│   └── service/
+│   ├── agents
+│   │   ├── state.py
+│   │   ├── tools.py
+│   │   ├── utils.py
+│   │   ├── workflow.py
+│   │   └── subgraphs
+│   │       ├── insight_extract.py
+│   │       ├── strategy_build.py
+│   │       └── strategy_gen.py
+│   ├── api
+│   │   └── routes
+│   │       └── chat.py
+│   ├── core
+│   │   ├── db.py
+│   │   ├── llm.py
+│   │   └── logger.py
+│   ├── models
+│   │   └── schemas
+│   │       └── chat.py
+│   ├── repository
+│   │   ├── client
+│   │   │   ├── base.py
+│   │   │   ├── llm_client.py
+│   │   │   └── search_client.py
+│   │   └── vector
+│   │       └── vector_repo.py
+│   └── service
+│       ├── agent_service.py
+│       ├── embedding_service.py
+│       └── vector_service.py
 ├── chroma_tm/
 ├── downloads/
-├── infra/
 ├── logs/
-├── reports/
-├── resources/
-└── scripts/
+└── reports/
 ```
 
 ## 📄 파일 설명
@@ -198,13 +212,12 @@ C:/Users/kwjj0/Trend-Mirror/
 
 -   `workflow.py`: LangGraph를 사용하여 전체 에이전트 워크플로우(그래프)를 정의하고 컴파일합니다.
 -   `state.py`: 워크플로우의 각 단계 간에 데이터를 전달하는 데 사용되는 공유 상태(`TMState`)를 정의합니다.
--   `tools.py`: 에이전트가 사용하는 핵심 도구(`youtube_crawling_tool`, `generate_report_pdf` 등)와 다른 서브그래프를 호출하는 브릿지 도구(`run_keyword_extraction`)를 정의합니다.
+-   `tools.py`: 에이전트가 사용하는 도구(PDF 다운로드, 문서 파싱, 리포트 생성 등)를 정의합니다. `@tool` 데코레이터를 사용하여 LangChain 도구로 만듭니다.
 -   `utils.py`: JSON 파싱, 토큰 수 계산 등 워크플로우 전반에서 사용되는 유틸리티 함수들을 포함합니다.
 -   **`app/agents/subgraphs/`**: 각 에이전트의 구체적인 로직을 포함하는 서브그래프들입니다.
     -   `strategy_build.py`: 사용자의 입력을 분석하여 의도(`intent`)와 주요 정보(`slots`)를 추출합니다.
-    -   `youtube_process.py`: 유튜브 데이터 크롤링부터 키워드 추출까지의 과정을 관장하는 상위 서브그래프입니다.
-    -   `keyword_extract.py`: LLM을 이용해 영상 제목/설명에서 실제 트렌드 키워드를 추출하고, 결과를 DB에 동기화하도록 `SyncService`를 호출합니다.
-    -   `strategy_gen.py`: 분석된 데이터(DB 조회 결과 또는 실시간 분석 결과)를 바탕으로 최종 리포트를 생성합니다.
+    -   `insight_extract.py`: `strategy_build`에서 추출된 정보를 바탕으로 웹에서 관련 문서를 검색, 다운로드하고 RAG를 위한 데이터베이스를 구축합니다.
+    -   `strategy_gen.py`: `insight_extract`에서 처리된 데이터를 바탕으로 최종 트렌드 리포트를 생성하고 PDF로 저장합니다.
 
 #### `app/api/`
 
@@ -231,7 +244,6 @@ C:/Users/kwjj0/Trend-Mirror/
 
 -   `agent_service.py`: 에이전트 워크플로우를 실행하고 그 결과를 반환하는 비즈니스 로직을 담당합니다.
 -   `embedding_service.py`: 텍스트를 벡터로 변환하는 임베딩 생성 로직을 담당합니다.
--   `sync_service.py`: CSV 파일의 내용을 분석하여 벡터 DB에 최신 상태로 동기화(기존 정보 삭제 후 신규 정보 추가)하는 로직을 담당합니다.
 -   `vector_service.py`: `ChromaDBRepository`와 `EmbeddingService`를 사용하여 문서 저장 및 검색과 관련된 비즈니스 로직을 처리합니다.
 
 ### 기타 디렉토리
@@ -241,3 +253,24 @@ C:/Users/kwjj0/Trend-Mirror/
 -   `logs/`: 날짜별로 에이전트 실행 로그가 저장되는 디렉토리입니다.
 -   `reports/`: 생성된 최종 PDF 리포트가 저장되는 디렉토리입니다.
 
+## ⚙️ 실행 방법
+
+### 1. 환경 설정
+
+프로젝트 루트 디렉토리에 `.env` 파일을 생성하고 필요한 API 키를 입력합니다.
+
+```
+UPSTAGE_API_KEY="YOUR_UPSTAGE_API_KEY"
+SERPER_API_KEY="YOUR_SERPER_API_KEY"
+```
+
+### 2. 서버 실행
+
+`pyproject.toml` 파일이 있는 루트 디렉토리에서 다음 명령어를 실행하여 필요한 라이브러리를 설치합니다. `uv` 와 같은 가상환경 및 패키지 관리 도구 사용을 권장합니다.
+
+```bash
+uv run main
+```
+
+
+서버가 정상적으로 실행되면, `http://localhost:8000/docs` 에서 API 문서를 확인할 수 있습니다.

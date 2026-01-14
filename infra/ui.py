@@ -30,52 +30,80 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# def response_generator(prompt, session_id):
+#     try:
+#         with httpx.stream(
+#             "POST",
+#             f"{BACKEND_URL}/api/v1/chat",
+#             json={
+#                 "query" : prompt,
+#                 "session_id":session_id
+#             },
+#             timeout=None
+#         ) as response:
+#             if response.status_code != 200:
+#                 yield f"오류가 발생하였습니다 (상태코드: {response.status_code})"
+#                 return
+#             status = st.status("trend mirror 에이전트가 분석 중입니다....")
+
+#             is_answering = False
+            
+#             for line in response.iter_lines():
+#                 if line.startswith("data: "):
+#                     data_str = line[len("data: "):].strip()
+                
+#                     if data_str == "[DONE]":
+#                         break
+#                     try:
+#                         event = json.loads(data_str)
+#                         if "error" in event:
+#                             yield f"\n\n error : {event['error']}"
+                        
+#                         if "log" in event:
+#                             status.write(event['log'])
+#                             continue
+#                         if "answer" in event and event["answer"]:
+#                             if not is_answering:
+#                                 status.update(label="분석 완료", state="complete", expanded=False)
+#                                 is_answering=True
+                            
+#                             yield event["answer"] # 데이터 한덩이씩 밖으로
+#                     except json.JSONDecodeError:
+#                         continue
+
+#             if not is_answering:
+#                 status.update(label="작업 완료", state="complete", expanded=False)
+            
+#     except Exception as e:
+#             yield f"연결 오류:{str(e)}"
 def response_generator(prompt, session_id):
     try:
-        with httpx.stream(
-            "POST",
-            f"{BACKEND_URL}/agent/chat/stream",
+        status = st.status("trend mirror 에이전트가 분석 중입니다....", expanded=True)
+
+
+        r = httpx.post(
+            f"{BACKEND_URL}/api/v1/chat",
             json={
-                "query" : prompt,
-                "session_id":session_id
+                "query": prompt,
+                "thread_id": session_id,
+                "bypass_crawling": False
             },
             timeout=None
-        ) as response:
-            if response.status_code != 200:
-                yield f"오류가 발생하였습니다 (상태코드: {response.status_code})"
-                return
-            status = st.status("trend mirror 에이전트가 분석 중입니다....")
+        )
 
-            is_answering = False
-            
-            for line in response.iter_lines():
-                if line.startswith("data: "):
-                    data_str = line[len("data: "):].strip()
-                
-                    if data_str == "[DONE]":
-                        break
-                    try:
-                        event = json.loads(data_str)
-                        if "error" in event:
-                            yield f"\n\n error : {event['error']}"
-                        
-                        if "log" in event:
-                            status.write(event['log'])
-                            continue
-                        if "answer" in event and event["answer"]:
-                            if not is_answering:
-                                status.update(label="분석 완료", state="complete", expanded=False)
-                                is_answering=True
-                            
-                            yield event["answer"] # 데이터 한덩이씩 밖으로
-                    except json.JSONDecodeError:
-                        continue
+        if r.status_code != 200:
+            status.update(label="오류", state="error")
+            yield f"오류 발생 ({r.status_code})\n{r.text}"
+            return
 
-            if not is_answering:
-                status.update(label="작업 완료", state="complete", expanded=False)
-            
+        data = r.json()
+        answer = data.get("answer") or data.get("result") or str(data)
+
+        status.update(label="분석 완료", state="complete", expanded=False)
+        yield answer
+
     except Exception as e:
-            yield f"연결 오류:{str(e)}"
+        yield f"연결 오류: {str(e)}"
 
 if prompt := st.chat_input("분석하고 싶은 트렌드 주제를 입력해주세요."):
 

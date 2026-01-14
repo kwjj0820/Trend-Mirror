@@ -29,8 +29,8 @@ def create_app() -> FastAPI:
     # 라우터 등록
     app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 
-    @app.get("/health")
-    def health_check():
+    @app.get("/trendmirror")
+    def trendmirror_check():
         return {"status": "ok"}
 
     return app

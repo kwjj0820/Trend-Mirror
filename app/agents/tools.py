@@ -11,6 +11,8 @@ from langchain.tools import tool
 from dotenv import load_dotenv
 import json
 from typing import Dict, Any
+import datetime # Import datetime
+from app.core.logger import logger # Import logger
 
 from app.agents.subgraphs.keyword_extract import keyword_extraction_graph
 
@@ -77,6 +79,7 @@ def parse_pdf_to_markdown(pdf_path: str) -> str:
 @tool
 def generate_report_pdf(content: str, filename: str = "trendmirror_report.pdf") -> str:
     """분석 결과를 PDF 파일로 생성합니다. 한글 출력을 위해 나눔고딕 폰트를 사용합니다."""
+    logger.info(f"generate_report_pdf called with filename='{filename}'")
     out_dir = "reports"
     pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
     path = f"{out_dir}/{filename}"
@@ -132,7 +135,7 @@ def generate_report_pdf(content: str, filename: str = "trendmirror_report.pdf") 
 
 
 @tool
-def youtube_crawling_tool(query: str, days: int = 30) -> str:
+def youtube_crawling_tool(query: str, days: int = 7) -> str:
     """
     YouTube 트렌드 데이터를 수집하여 CSV 파일로 저장하고 그 경로를 반환합니다.
     실제 app.repository.client.youtube_client를 사용합니다.
@@ -140,11 +143,14 @@ def youtube_crawling_tool(query: str, days: int = 30) -> str:
     from app.repository.client.youtube_client import collect_youtube_trend_candidates_df
     import pandas as pd
 
+    logger.info(f"youtube_crawling_tool called with query='{query}', days='{days}'")
+
     out_dir = "downloads"
     pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
-    # 파일 이름에 쿼리와 날짜를 포함하여 캐싱 효과를 기대
+    # 파일 이름에 쿼리와 저장 날짜를 포함하여 캐싱 효과를 기대
     safe_query = "".join(c for c in query if c.isalnum())
-    file_path = f"{out_dir}/youtube_{safe_query}_{days}d_real_data.csv"
+    current_date = datetime.datetime.now().strftime("%Y%m%d")
+    file_path = f"{out_dir}/youtube_{safe_query}_{current_date}_{days}d_real_data.csv"
 
     try:
         df = collect_youtube_trend_candidates_df(query=query, days=days)
@@ -164,13 +170,8 @@ def run_keyword_extraction(csv_path: str, slots: Dict[str, Any]) -> str:
     if not isinstance(csv_path, str) or not csv_path.endswith('.csv'):
         return "오류: 유효한 CSV 파일 경로를 입력해야 합니다. (예: 'downloads/youtube_dummy_data.csv')"
 
-    # 정규 표현식으로 경로 추출 (Tool에서 받은 문자열에 설명이 포함될 경우)
-    import re
-    match = re.search(r"['\"]?([a-zA-Z0-9_/\.-]+\.csv)['\"]?", csv_path)
-    if not match:
-        return f"오류: '{csv_path}'에서 유효한 CSV 파일 경로를 찾을 수 없습니다."
-
-    cleaned_path = match.group(1)
+    # youtube_crawling_tool에서 이미 정리된 경로를 반환하므로 추가 파싱 불필요
+    cleaned_path = csv_path
 
     if not os.path.exists(cleaned_path):
         return f"오류: 파일이 존재하지 않습니다: {cleaned_path}"
