@@ -161,6 +161,43 @@ def youtube_crawling_tool(query: str, days: int = 30) -> str:
 
 
 @tool
+def naver_blog_crawling_tool(queries: list[str], main_query: str, days: int = 1) -> str:
+    """
+    주어진 쿼리 목록으로 네이버 블로그를 검색하여 트렌드 후보 데이터를 수집하고,
+    CSV 파일로 저장한 뒤 그 경로를 반환합니다.
+    파일명은 main_query를 기반으로 생성됩니다.
+    """
+    from app.repository.client.naver_blog_client import collect_naver_blog_candidates, filter_food_posts
+    import pandas as pd
+
+    logger.info(f"naver_blog_crawling_tool called with main_query='{main_query}', {len(queries)} queries, days='{days}'")
+
+    out_dir = "downloads"
+    pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
+    
+    # main_query를 기반으로 파일명 생성
+    safe_identifier = "".join(c for c in main_query if c.isalnum())
+    current_date = datetime.datetime.now().strftime("%Y%m%d")
+    file_path = f"{out_dir}/naver_blog_{safe_identifier}_{current_date}_{days}d_real_data.csv"
+
+    try:
+        # 네이버 블로그 데이터 수집
+        raw_posts = collect_naver_blog_candidates(queries=queries, days=days)
+        # '음식' 관련 포스트 필터링 (현재는 음식 관련으로 되어있으나, 추후 일반화 가능)
+        filtered_posts = filter_food_posts(raw_posts)
+        
+        df = pd.DataFrame(filtered_posts)
+        if "post_date" in df.columns:
+            df["post_date"] = df["post_date"].astype(str)
+
+        df.to_csv(file_path, index=False, encoding='utf-8-sig')
+        return f"네이버 블로그 검색 결과가 다음 경로에 CSV 파일로 저장되었습니다: {file_path}"
+    except Exception as e:
+        logger.error(f"Error during naver blog crawling: {e}", exc_info=True)
+        return f"Error during naver blog crawling: {e}"
+
+
+@tool
 def run_keyword_extraction(csv_path: str, slots: Dict[str, Any]) -> str:
     """
     주어진 CSV 파일 경로에 대해 키워드 추출 워크플로우를 실행합니다.

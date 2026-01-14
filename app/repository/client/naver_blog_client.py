@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import requests
 from dotenv import load_dotenv
 from pathlib import Path
+from app.core.logger import logger
 
 ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(ROOT/".env")
@@ -14,7 +15,9 @@ load_dotenv(ROOT/".env")
 NAVER_CLIENT_ID = (os.getenv("NAVER_CLIENT_ID") or "").strip()
 NAVER_CLIENT_SECRET = (os.getenv("NAVER_CLIENT_SECRET") or "").strip()
 
-print(NAVER_CLIENT_ID)
+logger.info(NAVER_CLIENT_ID)
+logger.info(NAVER_CLIENT_SECRET)
+
 NAVER_BLOG_SEARCH_URL = "https://openapi.naver.com/v1/search/blog.json"
 
 

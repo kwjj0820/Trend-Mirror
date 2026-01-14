@@ -25,6 +25,7 @@ class TMState(TypedDict, total=False):
 
     # --- Keyword Extraction Outputs ---
     csv_path: str
+    naver_blog_csv_path: str # 네이버 블로그 크롤링 결과 CSV 경로
     output_path: str
 
     # --- Gen Agent Outputs ---
