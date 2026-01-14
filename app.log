@@ -1,0 +1,7 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\ning\\Downloads\\trendmirror\\Trend-Mirror']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [148] using WatchFiles
+INFO:     Started server process [22992]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:11983 - "GET /trendmirror HTTP/1.1" 200 OK
