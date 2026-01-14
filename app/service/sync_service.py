@@ -1,3 +1,4 @@
+import re
 import pandas as pd
 import os
 from datetime import datetime, timedelta
@@ -7,13 +8,10 @@ from app.core.logger import logger
 class SyncService:
     """
     특정 형식의 트렌드 분석 CSV 파일을 Vector DB와 동기화하는 서비스
-    - 허용 파일명: (SNS)_(카테고리)_(날짜)_7d_real_data_keyword_frequencies.csv
-    - 정책: 30일 보관, 빈도수 3 이상 적재, Rank 제외
+    - 허용 파일명: (SNS)_(카테고리)_(날짜)_[N]d_real_data_keyword_frequencies.csv
+    - 정책: N일 보관, 빈도수 3 이상 적재, Rank 제외
     """
     
-    # 허용할 파일명의 접미사 (Suffix) 정의
-    REQUIRED_SUFFIX = "_30d_real_data_keyword_frequencies.csv"
-
     def __init__(self, vector_service: VectorService):
         self.vector_service = vector_service
 
@@ -21,35 +19,32 @@ class SyncService:
         """지정한 파일의 이름 형식을 검증하고 데이터를 DB에 적재합니다."""
         base_name = os.path.basename(file_path)
 
-        # 1. 파일명 뒷부분(Suffix) 검증
-        if not base_name.endswith(self.REQUIRED_SUFFIX):
-            logger.error(f"[Error] 건너뜀: 파일 형식이 일치하지 않습니다. ({base_name})")
-            logger.info(f"[Info] 필수 형식: [SNS]_[카테고리]_[날짜]{self.REQUIRED_SUFFIX}")
+        # 1. Regex를 이용한 새로운 파일명 검증
+        pattern = re.compile(r"^(?P<sns>\w+)_(?P<category>.+)_(?P<date>\d{8})_(?P<days>\d+)d_real_data_keyword_frequencies\.csv$")
+        match = pattern.match(base_name)
+
+        if not match:
+            logger.error(f"[SKIP] Invalid file format or structure: {base_name}")
+            logger.info("[INFO] Required format: [SNS]_[CATEGORY]_[DATE]_[DAYS]d_real_data_keyword_frequencies.csv")
             return
 
-        # 2. 파일명에서 정보 추출
-        # 뒷부분 접미사를 제거한 후 '_'로 분리
-        prefix = base_name.replace(self.REQUIRED_SUFFIX, "")
-        parts = prefix.split("_")
-        
-        if len(parts) < 3:
-            logger.error(f"[Error] 파일명 정보 부족: {base_name} (SNS, 카테고리, 날짜 정보가 필요합니다)")
-            return
-
-        sns_name = parts[0]
-        category = parts[1]
-        file_date_str = parts[2]
+        # 2. Regex 그룹에서 정보 추출
+        file_info = match.groupdict()
+        sns_name = file_info['sns']
+        category = file_info['category']
+        file_date_str = file_info['date']
+        days_in_file = int(file_info['days'])
 
         try:
             target_date = datetime.strptime(file_date_str, "%Y%m%d")
-            # 30일 보관 정책을 위한 기준일 계산
-            cutoff_date_int = int((target_date - timedelta(days=30)).strftime("%Y%m%d"))
+            # 파일명에서 추출한 days를 사용하여 기준일 계산
+            cutoff_date_int = int((target_date - timedelta(days=days_in_file)).strftime("%Y%m%d"))
             current_date_int = int(file_date_str)
         except ValueError:
-            logger.error(f"[Error] 날짜 형식 오류: {file_date_str} (YYYYMMDD 형식이 아닙니다)")
+            logger.error(f"[ERROR] Invalid date format in filename: {file_date_str} (must be YYYYMMDD)")
             return
 
-        logger.info(f"[Sync] [{sns_name} | {category}] 검증 완료. 데이터 분석 시작 (기준일: {file_date_str})")
+        logger.info(f"[SYNC] [{sns_name} | {category}] Validation complete. Starting data analysis for date: {file_date_str}")
 
         # 3. DB 정리 (30일 초과 데이터 삭제 및 동일 날짜 데이터 교체)
         try:
@@ -70,7 +65,7 @@ class SyncService:
                 ]
             })
         except Exception as e:
-            logger.debug(f"[Info] DB 정리 중 참고사항: {e}")
+            logger.debug(f"[INFO] Note during DB cleanup: {e}")
 
         # 4. CSV 데이터 로드 및 전처리
         try:
@@ -78,11 +73,11 @@ class SyncService:
             df = pd.read_csv(file_path, encoding='utf-8-sig')
             df.columns = [col.strip().lower() for col in df.columns]
         except Exception as e:
-            logger.error(f"[Error] 파일 읽기 실패: {e}")
+            logger.error(f"[ERROR] Failed to read file: {e}")
             return
 
         if 'keyword' not in df.columns or 'frequency' not in df.columns:
-            logger.error(f"[Error] 필수 컬럼(keyword, frequency) 누락. 현재 컬럼: {list(df.columns)}")
+            logger.error(f"[ERROR] Missing required columns (keyword, frequency). Current columns: {list(df.columns)}")
             return
 
         # 5. 데이터 적재 준비 (빈도수 3 이상만)
@@ -112,6 +107,6 @@ class SyncService:
         # 6. 최종 Vector DB 적재
         if ids:
             self.vector_service.add_documents(documents=documents, metadatas=metadatas, ids=ids)
-            logger.info(f"[Success] 동기화 완료: {len(ids)}개의 유효 키워드가 DB에 저장되었습니다.")
+            logger.info(f"[SUCCESS] Sync complete: {len(ids)} valid keywords saved to DB.")
         else:
-            logger.warning(f"[Warning] {base_name}에 빈도수 3 이상의 적재할 데이터가 없습니다.")
+            logger.warning(f"[WARNING] No data to load in {base_name} with frequency >= 3.")

@@ -135,7 +135,7 @@ def generate_report_pdf(content: str, filename: str = "trendmirror_report.pdf") 
 
 
 @tool
-def youtube_crawling_tool(query: str, days: int = 7, pages: int = 10) -> str:
+def youtube_crawling_tool(query: str, days: int = 7, pages: int = 1) -> str:
     """
     YouTube 트렌드 데이터를 수집하여 CSV 파일로 저장하고 그 경로를 반환합니다.
     실제 app.repository.client.youtube_client를 사용합니다.
