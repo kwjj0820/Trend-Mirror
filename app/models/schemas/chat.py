@@ -6,6 +6,7 @@ class ChatRequest(BaseModel):
     query: str = Field(..., description="사용자의 질문 또는 분석 요청")
     thread_id: str = Field(default="default_thread", description="대화 세션 ID (기억 유지용)")
 
+
 class ChatResponse(BaseModel):
     answer: str = Field(..., description="에이전트의 최종 답변")
     pdf_path: Optional[str] = Field(None, description="생성된 리포트 PDF 경로")

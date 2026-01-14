@@ -9,3 +9,7 @@ def get_solar_chat():
 
 def get_upstage_embeddings():
     return _client.get_embedding_model()
+
+def get_solar_pro_chat_client():
+    """키워드 추출용 Solar-pro 모델 클라이언트를 반환합니다."""
+    return _client.get_solar_pro_client()

@@ -2,6 +2,7 @@
 from typing import TypedDict, List, Dict, Any, Annotated
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
+from app.service.sync_service import SyncService
 
 # 노트북의 TMState 구조 이식
 class TMState(TypedDict, total=False):
@@ -21,6 +22,10 @@ class TMState(TypedDict, total=False):
     chunks: List[Dict[str, Any]]           # [{"chunk_id":..., "text":...}]
     retrieved: List[Dict[str, Any]]        # top 25 raw
     reranked: List[Dict[str, Any]]         # top 10 after judge
+
+    # --- Keyword Extraction Outputs ---
+    csv_path: str
+    output_path: str
 
     # --- Gen Agent Outputs ---
     final_answer: str

@@ -15,7 +15,10 @@ async def chat_endpoint(
     """
     TrendMirror 에이전트와 대화하는 엔드포인트
     """
-    result = agent_service.run_agent(request.query, request.thread_id)
+    result = agent_service.run_agent(
+        user_query=request.query,
+        thread_id=request.thread_id
+    )
 
     return ChatResponse(
         answer=result["answer"],
