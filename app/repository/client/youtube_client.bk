@@ -38,7 +38,7 @@ def yt_search(query: str, max_results: int = 50, days: int = 30, pages: int = 1)
             "relevanceLanguage": "ko",
             "regionCode": "KR",
             "safeSearch": "none",
-            "order": "date",
+            # "order": "viewCount",
         }
         if page_token:
             params["pageToken"] = page_token
@@ -110,13 +110,16 @@ def trend_score(stats: Dict[str, Any], published_at: str) -> float:
 """
 현재 30일 기준임. 50개씩 페이지 3개
 """
-def collect_youtube_trend_candidates(query: str, days=30, per_query=50, pages=1) -> List[Dict[str, Any]]:
-    if not query:
-        # Fallback to a default query if none is provided
-        queries = ["요즘 유행"]
-    else:
-        # Use only the provided query for broader search scope
-        queries = [query]
+def collect_youtube_trend_candidates(days=30, per_query=50, pages=3) -> List[Dict[str, Any]]:
+    queries = [
+        "요즘 유행 음식",
+        "요즘 핫한 음식",
+        "신상 먹방",
+        "유행 음식 추천",
+        "핫플 음식",
+        "편의점 신상 먹방",
+        "요즘 유행 디저트",
+    ]
 
     videos = []
     seen = set()
@@ -138,8 +141,8 @@ def collect_youtube_trend_candidates(query: str, days=30, per_query=50, pages=1)
     videos.sort(key=lambda x: x["score"], reverse=True)
     return videos
 
-def collect_youtube_trend_candidates_df(query: str, days=30, per_query=50, pages=1) -> pd.DataFrame:
-    videos = collect_youtube_trend_candidates(query=query, days=days, per_query=per_query, pages=pages)
+def collect_youtube_trend_candidates_df(days=30, per_query=50, pages=3) -> pd.DataFrame:
+    videos = collect_youtube_trend_candidates(days=days, per_query=per_query, pages=pages)
     df = pd.DataFrame(videos)
 
     preferred = [
@@ -157,7 +160,7 @@ def collect_youtube_trend_candidates_df(query: str, days=30, per_query=50, pages
     return df
 
 if __name__ == "__main__":
-    df = collect_youtube_trend_candidates_df(days=30, per_query=50, pages=1)
+    df = collect_youtube_trend_candidates_df(days=30, per_query=50, pages=3)
     print(df.head(10))
     data_dir = os.path.join("data")
     os.makedirs(data_dir, exist_ok=True)
