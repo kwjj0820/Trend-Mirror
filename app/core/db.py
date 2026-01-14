@@ -26,7 +26,7 @@ class ChromaDBConnection:
             from chromadb.config import Settings
             self._client = chromadb.PersistentClient(
                 path=persist_path,
-                settings=Settings(anonymized_telemetry=False)
+                settings=Settings(anonymized_telemetry=False, allow_reset=True)
             )
 
     @property

@@ -1,78 +1,9 @@
 INFO:     Will watch for changes in these directories: ['C:\\Users\\ning\\Downloads\\trendmirror\\Trend-Mirror']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [21824] using WatchFiles
-INFO:     Started server process [14292]
+INFO:     Started reloader process [21376] using WatchFiles
+INFO:     Started server process [3472]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     127.0.0.1:6986 - "GET /trendmirror HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6991 - "GET /api/v1/chat HTTP/1.1" 405 Method Not Allowed
-INFO:     127.0.0.1:6992 - "GET /docs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6992 - "GET /openapi.json HTTP/1.1" 200 OK
-[2026-01-14 13:44:28] [INFO] --- (1) Entered Strategy Builder Subgraph ---
-[2026-01-14 13:44:28] [INFO] Analyzing user input: '요즘 유행하는 디저트'
-[2026-01-14 13:44:28] [INFO] Calling LLM to analyze user intent...
-[2026-01-14 13:44:29] [INFO] Intent analysis complete. Parsed parameters: {"intent": "trendmirror", "slots": {"region": "KR", "period_days": 30, "channels": ["Youtube", "Instagram", "Blog"], "domain": "요즘 유행하는 디저트", "search_query": "디저트"}, "cache_key": "trendmirror_KR_30_Youtube_Instagram_Blog_요즘 유행하는 디저트_디저트"}
-[2026-01-14 13:44:29] [INFO] --- Strategy Builder Subgraph Finished ---
-[2026-01-14 13:44:29] [INFO] [Router] No cache hit. Routing to YouTube Processing Subgraph.
-[2026-01-14 13:44:29] [INFO] --- (YT) Entered YouTube Processing Subgraph ---
-[2026-01-14 13:44:29] [INFO] Step YT.1: Calling youtube_crawling_tool...
-[2026-01-14 13:44:29] [INFO] youtube_crawling_tool called with query='요즘 유행하는 디저트', days='7'
-[2026-01-14 13:44:29] [INFO] Crawling tool returned: Error during youtube crawling: collect_youtube_trend_candidates() got an unexpected keyword argument 'query'
-[2026-01-14 13:44:29] [ERROR] Extracted path 'collect_youtube_trend_candidates() got an unexpected keyword argument 'query'' does not appear to be a CSV file.
-[2026-01-14 13:44:29] [INFO] --- (4) Entered Strategy Generation Subgraph (DB Query) ---
-[2026-01-14 13:44:29] [INFO] Report generation for Domain: '요즘 유행하는 디저트'
-[2026-01-14 13:44:29] [INFO] Retrieved top 5 keywords for '요즘 유행하는 디저트' from DB: []
-[2026-01-14 13:44:29] [INFO] Using retrieval query for detailed search: '요즘 유행하는 디저트'
-[2026-01-14 13:44:30] [INFO] Retrieved 0 detailed documents from Vector DB using n_results=10.
-INFO:     127.0.0.1:6993 - "POST /api/v1/chat HTTP/1.1" 200 OK
-[2026-01-14 13:44:34] [INFO] --- (1) Entered Strategy Builder Subgraph ---
-[2026-01-14 13:44:34] [INFO] Analyzing user input: '요즘 유행하는 디저트'
-[2026-01-14 13:44:34] [INFO] Calling LLM to analyze user intent...
-[2026-01-14 13:44:35] [INFO] Intent analysis complete. Parsed parameters: {"intent": "trendmirror", "slots": {"region": "KR", "period_days": 30, "channels": ["Youtube", "Instagram", "Blog"], "domain": "요즘 유행하는 디저트", "search_query": "디저트"}, "cache_key": "KR_30_Youtube_Instagram_Blog_요즘 유행하는 디저트_디저트"}
-[2026-01-14 13:44:35] [INFO] --- Strategy Builder Subgraph Finished ---
-[2026-01-14 13:44:35] [INFO] [Router] No cache hit. Routing to YouTube Processing Subgraph.
-[2026-01-14 13:44:35] [INFO] --- (YT) Entered YouTube Processing Subgraph ---
-[2026-01-14 13:44:35] [INFO] Step YT.1: Calling youtube_crawling_tool...
-[2026-01-14 13:44:35] [INFO] youtube_crawling_tool called with query='요즘 유행하는 디저트', days='7'
-[2026-01-14 13:44:35] [INFO] Crawling tool returned: Error during youtube crawling: collect_youtube_trend_candidates() got an unexpected keyword argument 'query'
-[2026-01-14 13:44:35] [ERROR] Extracted path 'collect_youtube_trend_candidates() got an unexpected keyword argument 'query'' does not appear to be a CSV file.
-[2026-01-14 13:44:35] [INFO] --- (4) Entered Strategy Generation Subgraph (DB Query) ---
-[2026-01-14 13:44:35] [INFO] Report generation for Domain: '요즘 유행하는 디저트'
-[2026-01-14 13:44:35] [INFO] Retrieved top 5 keywords for '요즘 유행하는 디저트' from DB: []
-[2026-01-14 13:44:35] [INFO] Using retrieval query for detailed search: '요즘 유행하는 디저트'
-[2026-01-14 13:44:35] [INFO] Retrieved 0 detailed documents from Vector DB using n_results=10.
-INFO:     127.0.0.1:6993 - "POST /api/v1/chat HTTP/1.1" 200 OK
-[2026-01-14 13:44:39] [INFO] --- (1) Entered Strategy Builder Subgraph ---
-[2026-01-14 13:44:40] [INFO] Analyzing user input: '요즘 유행하는 디저트'
-[2026-01-14 13:44:40] [INFO] Calling LLM to analyze user intent...
-[2026-01-14 13:44:41] [INFO] Intent analysis complete. Parsed parameters: {"intent": "trendmirror", "slots": {"region": "KR", "period_days": 30, "channels": ["Youtube", "Instagram", "Blog"], "domain": "요즘 유행하는 디저트", "search_query": "디저트"}, "cache_key": "trendmirror_KR_30_Youtube_Instagram_Blog_요즘 유행하는 디저트_디저트"}
-[2026-01-14 13:44:41] [INFO] --- Strategy Builder Subgraph Finished ---
-[2026-01-14 13:44:41] [INFO] [Router] No cache hit. Routing to YouTube Processing Subgraph.
-[2026-01-14 13:44:41] [INFO] --- (YT) Entered YouTube Processing Subgraph ---
-[2026-01-14 13:44:41] [INFO] Step YT.1: Calling youtube_crawling_tool...
-[2026-01-14 13:44:41] [INFO] youtube_crawling_tool called with query='요즘 유행하는 디저트', days='7'
-[2026-01-14 13:44:41] [INFO] Crawling tool returned: Error during youtube crawling: collect_youtube_trend_candidates() got an unexpected keyword argument 'query'
-[2026-01-14 13:44:41] [ERROR] Extracted path 'collect_youtube_trend_candidates() got an unexpected keyword argument 'query'' does not appear to be a CSV file.
-[2026-01-14 13:44:41] [INFO] --- (4) Entered Strategy Generation Subgraph (DB Query) ---
-[2026-01-14 13:44:41] [INFO] Report generation for Domain: '요즘 유행하는 디저트'
-[2026-01-14 13:44:41] [INFO] Retrieved top 5 keywords for '요즘 유행하는 디저트' from DB: []
-[2026-01-14 13:44:41] [INFO] Using retrieval query for detailed search: '요즘 유행하는 디저트'
-[2026-01-14 13:44:42] [INFO] Retrieved 0 detailed documents from Vector DB using n_results=10.
-INFO:     127.0.0.1:6993 - "POST /api/v1/chat HTTP/1.1" 200 OK
-[2026-01-14 13:44:47] [INFO] --- (1) Entered Strategy Builder Subgraph ---
-[2026-01-14 13:44:47] [INFO] Analyzing user input: '요즘 유행하는 디저트'
-[2026-01-14 13:44:47] [INFO] Calling LLM to analyze user intent...
-[2026-01-14 13:44:49] [INFO] Intent analysis complete. Parsed parameters: {"intent": "trendmirror", "slots": {"region": "KR", "period_days": 30, "channels": ["Youtube", "Instagram", "Blog"], "domain": "요즘 유행하는 디저트", "search_query": "디저트"}, "cache_key": "trendmirror_KR_30_['Youtube', 'Instagram', 'Blog']_요즘 유행하는 디저트_디저트"}
-[2026-01-14 13:44:49] [INFO] --- Strategy Builder Subgraph Finished ---
-[2026-01-14 13:44:49] [INFO] [Router] No cache hit. Routing to YouTube Processing Subgraph.
-[2026-01-14 13:44:49] [INFO] --- (YT) Entered YouTube Processing Subgraph ---
-[2026-01-14 13:44:49] [INFO] Step YT.1: Calling youtube_crawling_tool...
-[2026-01-14 13:44:49] [INFO] youtube_crawling_tool called with query='요즘 유행하는 디저트', days='7'
-[2026-01-14 13:44:49] [INFO] Crawling tool returned: Error during youtube crawling: collect_youtube_trend_candidates() got an unexpected keyword argument 'query'
-[2026-01-14 13:44:49] [ERROR] Extracted path 'collect_youtube_trend_candidates() got an unexpected keyword argument 'query'' does not appear to be a CSV file.
-[2026-01-14 13:44:49] [INFO] --- (4) Entered Strategy Generation Subgraph (DB Query) ---
-[2026-01-14 13:44:49] [INFO] Report generation for Domain: '요즘 유행하는 디저트'
-[2026-01-14 13:44:49] [INFO] Retrieved top 5 keywords for '요즘 유행하는 디저트' from DB: []
-[2026-01-14 13:44:49] [INFO] Using retrieval query for detailed search: '요즘 유행하는 디저트'
-[2026-01-14 13:44:49] [INFO] Retrieved 0 detailed documents from Vector DB using n_results=10.
-INFO:     127.0.0.1:7010 - "POST /api/v1/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10086 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10086 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10099 - "GET /trendmirror HTTP/1.1" 200 OK
