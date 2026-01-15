@@ -10,6 +10,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from langchain.tools import tool
 from dotenv import load_dotenv
 import json
+import pandas as pd
 from typing import Dict, Any
 import datetime # Import datetime
 from app.core.logger import logger # Import logger
@@ -135,29 +136,88 @@ def generate_report_pdf(content: str, filename: str = "trendmirror_report.pdf") 
 
 
 @tool
-def youtube_crawling_tool(query: str, days: int = 7, pages: int = 1) -> str:
+def youtube_crawling_tool(query: str, days: int = 7, pages: int = 5) -> "pd.DataFrame":
     """
-    YouTube 트렌드 데이터를 수집하여 CSV 파일로 저장하고 그 경로를 반환합니다.
-    실제 app.repository.client.youtube_client를 사용합니다.
+    Performs YouTube trend data collection with an incremental caching strategy.
+    It maintains a master cache for each query, fetches only new data since the last
+    crawl, and returns the requested data subset as a pandas DataFrame.
     """
     from app.repository.client.youtube_client import collect_youtube_trend_candidates_df
-    import pandas as pd
+    from datetime import datetime, timedelta, timezone
 
     logger.info(f"youtube_crawling_tool called with query='{query}', days='{days}', pages='{pages}'")
 
     out_dir = "downloads"
     pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
-    # 파일 이름에 쿼리와 저장 날짜를 포함하여 캐싱 효과를 기대
     safe_query = "".join(c for c in query if c.isalnum())
-    current_date = datetime.datetime.now().strftime("%Y%m%d")
-    file_path = f"{out_dir}/youtube_{safe_query}_{current_date}_{days}d_real_data.csv"
+    
+    master_cache_path = os.path.join(out_dir, f"youtube_{safe_query}_master_cache.csv")
+    
+    master_df = None
+    newest_date_in_cache = None
+    should_crawl = True
+    crawl_params = {
+        "query": query,
+        "days": days,
+        "pages": pages,
+        "published_after_date": None
+    }
 
-    try:
-        df = collect_youtube_trend_candidates_df(query=query, days=days, pages=pages)
-        df.to_csv(file_path, index=False, encoding='utf-8-sig')
-        return f"유튜브 검색 결과가 다음 경로에 CSV 파일로 저장되었습니다: {file_path}"
-    except Exception as e:
-        return f"Error during youtube crawling: {e}"
+    # 1. Load master cache if it exists
+    if os.path.exists(master_cache_path):
+        logger.info(f"Master cache found for query '{query}'. Loading cache...")
+        master_df = pd.read_csv(master_cache_path)
+        if not master_df.empty and 'published_at' in master_df.columns:
+            master_df['published_at'] = pd.to_datetime(master_df['published_at'], errors='coerce').dt.tz_convert('UTC')
+            newest_date_in_cache = master_df['published_at'].max()
+
+    # 2. Determine if and how to crawl
+    if newest_date_in_cache:
+        # If cache is very recent (less than a day old), skip crawl
+        if (datetime.now(timezone.utc) - newest_date_in_cache).days < 1:
+            logger.info(f"Cache is very recent (from {newest_date_in_cache}). Skipping crawl.")
+            should_crawl = False
+        else:
+            # Otherwise, perform incremental crawl from the last known date
+            logger.info(f"Performing incremental crawl since {newest_date_in_cache}.")
+            crawl_params["published_after_date"] = newest_date_in_cache.isoformat()
+    else:
+        logger.info(f"No master cache found. Performing full crawl for {days} days.")
+
+    # 3. Crawl new data if necessary
+    if should_crawl:
+        logger.info(f"Crawling new data with params: {crawl_params}")
+        new_df = collect_youtube_trend_candidates_df(**crawl_params)
+        
+        if not new_df.empty:
+            logger.info(f"Crawl found {len(new_df)} new items.")
+            # Ensure the 'published_at' column is in the correct format before merging
+            new_df['published_at'] = pd.to_datetime(new_df['published_at'], errors='coerce').dt.tz_convert('UTC')
+            
+            # 4. Merge, deduplicate, and update master cache
+            if master_df is not None:
+                master_df = pd.concat([master_df, new_df]).drop_duplicates(subset=['video_id']).reset_index(drop=True)
+            else:
+                master_df = new_df
+            
+            logger.info(f"Master cache updated. Total items now: {len(master_df)}")
+            logger.info(f"Updating master cache file: {master_cache_path}")
+            master_df.to_csv(master_cache_path, index=False, encoding='utf-8-sig')
+        else:
+            logger.info("Crawl found 0 new items.")
+
+    # 5. Filter and return the final DataFrame for the requested period
+    if master_df is None or master_df.empty:
+        logger.warning("No data found or collected for the query.")
+        return pd.DataFrame()
+        
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+    result_df = master_df[master_df['published_at'] >= cutoff_date].copy()
+    
+    logger.info(f"youtube_crawling_tool: Returning DataFrame with shape {result_df.shape}.")
+    logger.debug(f"--- DataFrame Head (youtube_crawling_tool) ---\n{result_df.head(3).to_string()}")
+    
+    return result_df
 
 
 # @tool
@@ -198,23 +258,29 @@ def youtube_crawling_tool(query: str, days: int = 7, pages: int = 1) -> str:
 
 
 @tool
-def run_keyword_extraction(csv_path: str, slots: Dict[str, Any]) -> str:
+def run_keyword_extraction(input_df_json: str, base_export_path: str, slots: Dict[str, Any]) -> str:
     """
-    주어진 CSV 파일 경로에 대해 키워드 추출 워크플로우를 실행합니다.
-    입력: CSV 파일 경로 (예: 'downloads/youtube_dummy_data.csv'), slots (사용자 의도에서 추출된 슬롯 정보)
+    DataFrame의 JSON 문자열을 키워드 추출 워크플로우로 그대로 전달합니다.
+    입력:
+    - input_df_json: pandas DataFrame을 JSON으로 변환한 문자열
+    - base_export_path: 출력 파일명을 생성하기 위한 기본 경로
+    - slots: 사용자 의도에서 추출된 슬롯 정보
     출력: 처리 결과 메시지 (성공 시 결과 파일 경로 포함)
     """
-    if not isinstance(csv_path, str) or not csv_path.endswith('.csv'):
-        return "오류: 유효한 CSV 파일 경로를 입력해야 합니다. (예: 'downloads/youtube_dummy_data.csv')"
+    logger.info(f"run_keyword_extraction: Received JSON string (len: {len(input_df_json)}). Passing to graph.")
 
-    # youtube_crawling_tool에서 이미 정리된 경로를 반환하므로 추가 파싱 불필요
-    cleaned_path = csv_path
+    if not isinstance(input_df_json, str) or not input_df_json:
+        return json.dumps({
+            "status": "error",
+            "message": "입력 데이터가 유효한 JSON 문자열이 아닙니다."
+        }, ensure_ascii=False)
 
-    if not os.path.exists(cleaned_path):
-        return f"오류: 파일이 존재하지 않습니다: {cleaned_path}"
-
-    # 컴파일된 그래프를 직접 호출합니다.
-    initial_state = {"csv_path": cleaned_path, "slots": slots}
+    # 그래프가 JSON 문자열을 직접 처리하도록 전달합니다.
+    initial_state = {
+        "input_df_json": input_df_json,
+        "base_export_path": base_export_path,
+        "slots": slots
+    }
     final_state = keyword_extraction_graph.invoke(initial_state)
 
     if final_state.get("error"):
@@ -225,6 +291,5 @@ def run_keyword_extraction(csv_path: str, slots: Dict[str, Any]) -> str:
 
     return json.dumps({
         "status": "success",
-        "input_path": cleaned_path,
-        "output_path": final_state.get("output_path")
+        "frequencies_df_json": final_state.get("frequencies_df_json")
     }, ensure_ascii=False)

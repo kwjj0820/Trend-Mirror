@@ -10,33 +10,46 @@ from app.core.logger import logger
 
 def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
     """
-    CSV 파일의 'title'과 'description' 컬럼을 기반으로, 지정된 '도메인'에 맞는
+    DataFrame의 'title'과 'description' 컬럼을 기반으로, 지정된 '도메인'에 맞는
     트렌드 키워드를 LLM을 사용하여 추출하고, 결과를 새로운 CSV 파일로 저장합니다.
     """
     logger.info("--- (KE) Entered Keyword Extraction Subgraph ---")
+    # --- 최종 디버깅 로그 ---
+    logger.info(f"keyword_extraction_node: Received state: {state}")
+    # --- 최종 디버깅 로그 ---
     try:
-        # 1. CSV 및 도메인 정보 읽기
+        # 1. DataFrame 및 기본 경로 정보 읽기 (수정됨)
+        from io import StringIO
         logger.info("Step KE.1: Loading data and domain from state...")
-        csv_path = state.get("csv_path")
+        input_df_json = state.get("input_df_json")
+        base_export_path = state.get("base_export_path")
         slots = state.get("slots", {})
-        domain = slots.get("domain", "any") # 도메인이 없으면 'any'
+        domain = slots.get("domain", "any")
 
-        if not csv_path or not csv_path.endswith('.csv'):
-            return {"error": "Invalid or missing CSV file path."}
+        if not input_df_json or not base_export_path:
+            return {"error": "Invalid or missing input_df_json or base_export_path."}
+        
+        try:
+            df = pd.read_json(StringIO(input_df_json), orient='split')
+        except Exception as e:
+            logger.error(f"Failed to deserialize DataFrame from JSON: {e}", exc_info=True)
+            return {"error": f"Failed to deserialize DataFrame: {e}"}
+        
+        # --- 로깅 추가 ---
+        logger.info(f"keyword_extraction_node: Received DataFrame with shape {df.shape}. Domain set to '{domain}'.")
+        logger.debug(f"--- DataFrame Head (keyword_extraction_node) ---\n{df.head(3).to_string()}")
+        # --- 로깅 추가 끝 ---
 
-        df = pd.read_csv(csv_path)
         # 제목과 설명 컬럼이 모두 있는지 확인
         if 'title' not in df.columns or 'description' not in df.columns:
-            return {"error": "'title' and/or 'description' column not found in the CSV."}
+            return {"error": "'title' and/or 'description' column not found in the DataFrame."}
         
         # 설명이 없는 경우를 대비해 빈 문자열로 채움
         df['description'] = df['description'].fillna('')
-        
-        logger.info(f"Successfully loaded {len(df)} rows. Domain set to '{domain}'.")
 
-        # 2. 키워드 추출
+        # 2. 키워드 추출 (기존 로직과 동일)
         model_name = "solar-pro"
-        batch_size = 20 # 컨텍스트가 길어졌으므로 배치 크기 축소
+        batch_size = 20
         logger.info(f"Step KE.2: Starting domain-specific trend keyword extraction via LLM with batch_size={batch_size}...")
         df_processed = df.copy()
         client = get_solar_pro_chat_client()
@@ -105,16 +118,15 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
         df_processed['trend_keywords'] = all_keywords[:len(df_processed)]
         logger.info("Keyword extraction via LLM complete.")
 
-        # 3. CSV 저장 및 DB 동기화
+        # 3. CSV 저장 및 DB 동기화 (수정됨)
         logger.info("Step KE.3: Saving results to new CSV file...")
-        output_path = csv_path.replace(".csv", "_with_keywords.csv")
+        output_path = f"{base_export_path}_with_keywords.csv"
         df_processed.to_csv(output_path, index=False, encoding='utf-8-sig')
         logger.info(f"Keyword-extracted data saved to '{output_path}'")
 
         # 키워드 빈도수 카운팅 및 CSV 저장
         all_extracted_keywords = []
         for keywords_str in df_processed['trend_keywords'].dropna():
-            # 한 행(영상) 내에서 중복된 키워드는 한 번만 카운트하기 위해 set으로 변환 후 추가
             keywords_in_row = [kw.strip().replace(' ', '') for kw in keywords_str.split(',') if kw.strip()]
             unique_keywords_in_row = set(keywords_in_row)
             all_extracted_keywords.extend(list(unique_keywords_in_row))
@@ -125,26 +137,16 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
         df_frequencies = pd.DataFrame(keyword_counts.items(), columns=['keyword', 'frequency'])
         df_frequencies = df_frequencies.sort_values(by='frequency', ascending=False)
         
-        freq_output_path = csv_path.replace(".csv", "_keyword_frequencies.csv")
-        df_frequencies.to_csv(freq_output_path, index=False, encoding='utf-8-sig')
-        logger.info(f"Keyword frequencies saved to '{freq_output_path}'")
-        
-        # ⚠️ 중요: Step KE.4 수정 - freq_output_path를 동기화에 사용
-        sync_service = config["configurable"].get("sync_service")
-        if sync_service:
-            logger.info("Step KE.4: Syncing extracted keywords to Vector DB...")
-            try:
-                # 수정된 부분: output_path 대신 freq_output_path 전달
-                sync_service.sync_csv_to_db(freq_output_path)
-            except Exception as sync_e:
-                logger.error(f"Failed to sync data to DB: {sync_e}", exc_info=True)
-        else:
-            logger.warning("SyncService not found in config. Skipping DB sync.")
+        # --- 디버깅 로그 추가 ---
+        logger.info(f"--- Extracted Keyword Frequencies (Top 10) ---\n{df_frequencies.head(10).to_string(index=False)}")
+        # --- 디버깅 로그 종료 ---
 
-        logger.info(f"Analysis complete! Saved to '{output_path}'")
+        # DataFrame을 다음 노드로 전달하기 위해 JSON으로 직렬화
+        frequencies_df_json = df_frequencies.to_json(orient='split', index=False)
+
         logger.info("--- Keyword Extraction Subgraph Finished ---")
 
-        return {"output_path": output_path, "error": None}
+        return {"frequencies_df_json": frequencies_df_json, "error": None}
 
     except Exception as e:
         logger.error(f"An error occurred in the keyword extraction process: {e}", exc_info=True)

@@ -115,10 +115,17 @@ def strategy_gen_node(state: TMState, config: RunnableConfig):
 
     # 5. PDF 생성 및 경로 반환
     current_date = datetime.datetime.now().strftime("%Y%m%d")
-    pdf_filename = f"report_{category}_{current_date}.pdf"
+    period_days = slots.get("period_days", 30) # 분석 기간(days)을 슬롯에서 가져옴
+    
+    # 파일명에 분석 기간을 포함하여 캐시 키를 더 명확하게 함
+    pdf_filename = f"report_{category}_{period_days}d_{current_date}.pdf"
+    
+    # 캐시 폴더에 저장하도록 경로 수정
+    cache_dir = "cache"
+    full_pdf_filename = os.path.join(cache_dir, pdf_filename)
     
     from app.agents.tools import generate_report_pdf
-    pdf_path = generate_report_pdf.invoke({"content": report_content, "filename": pdf_filename})
+    pdf_path = generate_report_pdf.invoke({"content": report_content, "filename": full_pdf_filename})
 
     logger.info("--- Strategy Generation Workflow Complete ---")
 
