@@ -35,7 +35,7 @@ class AgentService:
 
             return {
                 "answer": result.get("final_answer", "죄송합니다. 답변을 생성하지 못했습니다."),
-                "pdf_path": result.get("final_pdf_path"),
+                "pdf_path": result.get("pdf_path"),
                 "status": "success",
                 "logs": result.get("logs", [])
             }
