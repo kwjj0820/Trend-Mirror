@@ -18,6 +18,7 @@ spec:
       - name: frontend
         # GitHub Container Registry 주소 (실제 계정명과 프로젝트명으로 수정 필요)
         image: ghcr.io/kwjj0820/trend-mirror-frontend:lite
+        imagePullPolicy: Always
         ports:
         - containerPort: 8002
 
