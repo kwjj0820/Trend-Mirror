@@ -9,86 +9,90 @@ from app.service.vector_service import VectorService
 import datetime
 import os
 
-# [시스템 프롬프트] 전문가 페르소나 및 할루시네이션 방지 규칙 설정
+# [System Prompt] English Version - Senior Consultant Persona (Emoji-free)
 GEN_SYSTEM_PROMPT = """You are a Senior Market Strategy Consultant. 
 Your goal is to synthesize a high-quality trend report by balancing internal SNS data with external market research.
 
-[CRITICAL: ANTI-HALLUCINATION & GROUNDING]
-1. **Fact-Based Only**: Analyze based strictly on the provided 'Internal Data' and 'External Web Data'. 
-2. **Handle Incomplete Info**: If data for a specific keyword or trend is missing, explicitly state: "해당 키워드에 대한 구체적인 데이터가 부족하여 분석에서 제외됨." Do not make up information.
-3. **Balanced Perspective**: Ensure a 50:50 balance between positive opportunities and critical risks/limitations.
+[CRITICAL: ANTI-HALLUCINATION AND GROUNDING]
+1. Fact-Based Only: Analyze based strictly on the provided Internal Data and External Web Data.
+2. Handle Incomplete Info: If data for a specific keyword or trend is missing, explicitly state: Information for this keyword is insufficient for analysis and has been excluded. Do not invent information.
+3. Balanced Perspective: Maintain a neutral stance by providing an equal balance between positive opportunities and critical risks or limitations.
 
 [REPORT STRUCTURE]
-- Executive Summary: Key takeaways.
-- Deep Dive: Internal SNS trend analysis (Keywords, consumer reactions).
-- Market Context: External news and professional market analysis (via Tavily).
-- **Sustainability & Critical Review**: Is this a fad or a trend? Analysis of market saturation and risks.
-- Action Plan: Strategic suggestions.
+1. Executive Summary: Key takeaways of the report.
+2. Internal SNS Trend Analysis: Keywords and detailed consumer reactions.
+3. Market Context: External news and professional market analysis via Tavily.
+4. Sustainability and Critical Review: Analysis of market saturation, risks, and whether the trend is a fad or long-term.
+5. Strategic Action Plan: Data-driven strategic suggestions.
 
 Language: Korean (Natural and professional)
 Format: Structured Markdown
+Note: Do not use emojis or decorative icons in the output.
 """
 
 def strategy_gen_node(state: TMState, config: RunnableConfig):
     logger.info("--- [4] Strategy Generation Node: Hybrid Search & Analysis ---")
     
-    # 1. 초기 설정 및 데이터 로드
+    # 1. Configuration and Data Loading
     vector_service: VectorService = config["configurable"].get("vector_service")
     user_input = state["user_input"]
     slots = state.get("slots", {})
     category = slots.get('search_query', user_input)
+    period_days = slots.get("period_days", 30)
     sns = "youtube"
     
-    # 2. 지능적 키워드 필터링
-    # DB에서 빈도수 높은 키워드를 넉넉히 가져온 후 필터링 진행
-    raw_keywords_data = vector_service.get_keyword_frequencies(category=category, sns=sns, n_results=10)
+    # 2. Refined Keyword Filtering
+    raw_keywords_data = vector_service.get_keyword_frequencies(category=category, sns=sns, n_results=20)
     
-    # 필터링: 카테고리명 포함 단어, 무의미한 일반 단어 제외
-    stopwords = [category, "추천", "영상", "인기", "최근", "정보", "관련", "유튜브", "내용"]
+    clean_category = category.replace(" ", "").lower()
+    stopwords = ["추천", "영상", "인기", "최근", "정보", "관련", "유튜브", "내용", "조회수", "순위", "가지", "방법", "꿀팁", "이유"]
+    
     filtered_keywords = []
     for item in raw_keywords_data:
-        kw = item['keyword']
-        # 카테고리명이 키워드에 포함되어 있거나(예: 연예인 뉴스) stopwords에 있으면 제외
-        if any(stop in kw for stop in stopwords) or len(kw) < 2:
+        kw = item['keyword'].strip()
+        kw_clean = kw.lower().replace(" ", "")
+        
+        if kw_clean == clean_category or len(kw) < 2 or any(stop in kw for stop in stopwords):
             continue
         filtered_keywords.append(kw)
     
-    final_keywords = filtered_keywords[:5] # 최종 상위 5개 선정
+    final_keywords = filtered_keywords[:5]
     logger.info(f"Filtered Keywords for analysis: {final_keywords}")
 
     if not final_keywords:
-        logger.warning("No meaningful keywords found after filtering.")
-        # 키워드가 없을 경우 카테고리 자체로 진행하거나 에러 반환
+        logger.warning("No meaningful keywords found after filtering. Using category name.")
         final_keywords = [category]
 
-    # 3. 하이브리드 컨텍스트 수집
-    # 3-1. Vector DB 검색 (내부 데이터: 구체적 텍스트 정보)
+    # 3. Hybrid Context Collection
     db_context = ""
-    retrieval_query = f"{category} 트렌드 {', '.join(final_keywords)} 소비자 반응 및 상세 내용"
-    retrieved_docs = vector_service.search(query=retrieval_query, n_results=6)
-    for doc in retrieved_docs:
-        meta = doc.get('meta', {})
-        db_context += f"- [핵심단어: {meta.get('keyword')}] {doc.get('text')}\n"
+    seen_docs = set()
+    
+    for kw in final_keywords:
+        retrieval_query = f"{category} {kw} consumer response and market trend details"
+        kw_docs = vector_service.search(query=retrieval_query, n_results=2)
+        
+        for doc in kw_docs:
+            text = doc.get('text', '').strip()
+            if text and text not in seen_docs:
+                db_context += f"- [Keyword: {kw}] {text}\n"
+                seen_docs.add(text)
 
-    # 3-2. Tavily 웹 검색 (외부 데이터: 긍정적 기회 + 비평적 리스크)
+    # 3-2. Tavily Web Search
     web_context = ""
     try:
         tavily = TavilySearchResults(max_results=4)
-        # 양면적 분석을 유도하는 검색 쿼리 생성
-        search_query = f"{category} {', '.join(final_keywords[:2])} 시장 전망 및 성장 가능성 한계점 리스크"
-        logger.info(f"Web Search Query: {search_query}")
-        
-        web_results = tavily.invoke({"query": search_query})
-        web_context = "\n## 외부 시장 리서치 (Tavily):\n"
+        web_search_query = f"{category} {' '.join(final_keywords[:2])} market outlook and risks"
+        web_results = tavily.invoke({"query": web_search_query})
+        web_context = "\n## External Market Research (Tavily):\n"
         for res in web_results:
             web_context += f"- [{res['url']}]: {res['content']}\n"
     except Exception as e:
         logger.error(f"Web search failed: {e}")
-        web_context = "\n(외부 시장 데이터를 불러올 수 없습니다.)\n"
+        web_context = "\n(External market data unavailable)\n"
 
-    # 4. LLM 리포트 생성
-    context_str = f"## 분석 키워드: {', '.join(final_keywords)}\n\n"
-    context_str += "## 내부 데이터 (SNS/DB):\n" + (db_context if db_context else "데이터 없음\n")
+    # 4. LLM Report Generation
+    context_str = f"## Analysis Keywords: {', '.join(final_keywords)}\n\n"
+    context_str += "## Internal Data (SNS/DB):\n" + (db_context if db_context else "No internal data found.\n")
     context_str += web_context
 
     solar = get_solar_chat()
@@ -96,45 +100,41 @@ def strategy_gen_node(state: TMState, config: RunnableConfig):
         SystemMessage(content=GEN_SYSTEM_PROMPT),
         HumanMessage(content=f"""
 [User Request]: "{user_input}"
-[Category]: {category}
-
+[Target Category]: {category}
 [Provided Context]:
 {context_str}
-
-[Final Instruction]:
-1. 제공된 내부 데이터와 외부 시장 데이터를 비교하여 사실에 기반한 리포트를 작성하세요.
-2. {category}와 같은 카테고리 이름은 분석의 결과물로 강조하지 말고, 구체적인 트렌드 키워드({', '.join(final_keywords)})에 집중하세요.
-3. 긍정적인 정보와 비판적인 정보를 균형 있게 서술하여 독자가 객관적인 판단을 내릴 수 있도록 하세요.
-4. 근거 없는 할루시네이션(환각)은 엄격히 금지하며, 데이터가 없는 경우 반드시 '확인 불가'를 명시하세요.
+[Final Instructions]:
+1. Synthesize a fact-based report by comparing Internal Data and External Market Research.
+2. Focus your analysis on the specific keywords: {', '.join(final_keywords)}.
+3. Ensure all identified keywords are discussed.
+4. Maintain a balance between positive opportunities and critical risks.
+5. No Hallucinations: If data is missing, explicitly state it is unavailable.
 """)
     ]
 
-    logger.info("Calling Solar LLM for final report generation...")
     response = solar.invoke(messages)
     report_content = response.content
 
-    # 5. PDF 생성 및 경로 반환
+    # -----------------------------------------------------------
+    # 5. [수정] PDF Generation: 경로 단순화
+    # -----------------------------------------------------------
     current_date = datetime.datetime.now().strftime("%Y%m%d")
-    period_days = slots.get("period_days", 30) # 분석 기간(days)을 슬롯에서 가져옴
     
-    # 파일명에 분석 기간을 포함하여 캐시 키를 더 명확하게 함
+    # 불필요한 cache_dir 관련 로직을 제거하여 reports/ 폴더 바로 아래에 저장되게 함
     pdf_filename = f"report_{category}_{period_days}d_{current_date}.pdf"
     
-    # 캐시 폴더에 저장하도록 경로 수정
-    cache_dir = "cache"
-    full_pdf_filename = os.path.join(cache_dir, pdf_filename)
-    
     from app.agents.tools import generate_report_pdf
-    pdf_path = generate_report_pdf.invoke({"content": report_content, "filename": full_pdf_filename})
+    # 도구(Tool) 호출 시 파일명만 넘겨주면 tools.py의 out_dir("reports")와 결합됩니다.
+    pdf_path = generate_report_pdf.invoke({"content": report_content, "filename": pdf_filename})
 
-    logger.info("--- Strategy Generation Workflow Complete ---")
+    logger.info(f"Strategy Generation Workflow Complete. PDF saved at: {pdf_path}")
 
     return {
         "final_answer": report_content,
         "final_pdf_path": str(pdf_path)
     }
 
-# 그래프 구성
+# Graph Construction
 workflow = StateGraph(TMState)
 workflow.add_node("strategy_gen", strategy_gen_node)
 workflow.set_entry_point("strategy_gen")
