@@ -17,6 +17,7 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
     LLM을 사용하여 트렌드 키워드를 추출하고, 결과를 벡터 DB에 동기화합니다.
     안정성을 위해 배치 사이즈를 줄이고 API 타임아웃을 설정했습니다.
     """
+    logger.info("--- (KE) v2 --- Keyword Extraction Code ACTIVE ---") # New test log
     logger.info("--- (KE) Entered Keyword Extraction Subgraph ---")
     
     # 벡터 서비스 및 설정 로드
