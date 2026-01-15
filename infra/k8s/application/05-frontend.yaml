@@ -35,6 +35,19 @@ spec:
         env:
         - name: BACKEND_URL
           value: "http://backend:8000" # 백엔드 서비스 이름과 포트(8000) 일치시킴
+        # PVC 마운트 설정 추가
+        volumeMounts:
+        - name: app-data
+          mountPath: /app/downloads
+          subPath: downloads
+        - name: app-data
+          mountPath: /app/reports
+          subPath: reports
+      # 볼륨 정의
+      volumes:
+      - name: app-data
+        persistentVolumeClaim:
+          claimName: app-data-pvc
 ---
 # 2. Service: 클러스터 내부에서 프론트엔드를 가리키는 주소입니다.
 # (외부 접속은 이후 Ingress 단계에서 처리합니다)

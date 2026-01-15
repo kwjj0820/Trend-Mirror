@@ -31,10 +31,10 @@ spec:
         # PVC 마운트 설정
         volumeMounts:
         - name: app-data
-          mountPath: /downloads
+          mountPath: /app/downloads
           subPath: downloads
         - name: app-data
-          mountPath: /reports
+          mountPath: /app/reports
           subPath: reports
 
         # 리소스 제한 (클러스터 안정성을 위해 필수)
