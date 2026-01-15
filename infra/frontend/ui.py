@@ -235,15 +235,31 @@ if prompt := st.chat_input("분석하고 싶은 트렌드 주제를 입력해주
         )
 
         pdf_path = st.session_state.last_pdf_path
+        
+        # --- START OF DEBUGGING BLOCK ---
+        st.warning(f"디버깅 정보: `st.session_state.last_pdf_path` = `{pdf_path}`")
         if pdf_path:
             pdf_file = Path(pdf_path)
-            if pdf_file.exists():
+            absolute_path = pdf_file.absolute()
+            file_exists = pdf_file.exists()
+            
+            st.info(f"디버깅 정보: `pdf_path` = `{pdf_path}`")
+            st.info(f"디버깅 정보: 확인 중인 절대 경로 = `{absolute_path}`")
+            st.info(f"디버깅 정보: `pdf_file.exists()` 결과 = `{file_exists}`")
+            
+            if file_exists:
+                st.success("파일을 찾았습니다! 다운로드 버튼을 생성합니다.")
                 st.download_button(
                     label="PDF 다운로드",
                     data=pdf_file.read_bytes(),
                     file_name=pdf_file.name,
                     mime="application/pdf"
                 )
+            else:
+                st.error("파일 경로는 받았지만, 해당 경로에서 파일을 찾을 수 없습니다.")
+        else:
+            st.error("`st.session_state.last_pdf_path`에 PDF 경로가 없습니다.")
+        # --- END OF DEBUGGING BLOCK ---
 
     st.session_state.messages.append({
         "role": "assistant",
