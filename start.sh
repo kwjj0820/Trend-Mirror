@@ -53,7 +53,7 @@ export BACKEND_URL="http://localhost:$PORT"
 export STREAMLIT_BROWSER_GATHER_USAGE_STATS="false"
 export STREAMLIT_SERVER_HEADLESS="true"
 
-nohup uv run streamlit run infra/ui.py --server.port 8002 > ui.log 2>&1 &
+nohup uv run streamlit run infra/frontend/ui.py --server.port 8002 > ui.log 2>&1 &
 echo $! > ui.pid
 
 echo -e "\n--------------------------------------------------"

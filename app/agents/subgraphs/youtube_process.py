@@ -25,7 +25,7 @@ def youtube_process_node(state: TMState, config: RunnableConfig) -> dict:
     crawling_query = slots.get("search_query", user_input)
     
     days_to_crawl = slots.get("period_days", 7)
-    pages_to_crawl = slots.get("pages", 10)
+    pages_to_crawl = slots.get("pages", 5)
     
     logger.info(f"Domain: '{domain}', Crawling Query: '{crawling_query}', Days: {days_to_crawl}, Pages: {pages_to_crawl}")
 
@@ -66,7 +66,6 @@ def youtube_process_node(state: TMState, config: RunnableConfig) -> dict:
         "base_export_path": base_export_path,
         "slots": state.get("slots", {}),
     })
-    logger.info(f"Keyword extraction tool returned: {keyword_result_str}")
 
     try:
         keyword_result = json.loads(keyword_result_str)
