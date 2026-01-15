@@ -117,8 +117,10 @@ def strategy_gen_node(state: TMState, config: RunnableConfig):
     current_date = datetime.datetime.now().strftime("%Y%m%d")
     pdf_filename = f"report_{category}_{current_date}.pdf"
     
-    from app.agents.tools import generate_report_pdf
-    pdf_path = generate_report_pdf.invoke({"content": report_content, "filename": pdf_filename})
+    # from app.agents.tools import generate_report_pdf
+    # pdf_path = generate_report_pdf.invoke({"content": report_content, "filename": pdf_filename})
+    from app.agents.tools import generate_report_pdf_v2_tool
+    pdf_path = generate_report_pdf_v2_tool.invoke({"content": report_content, "filename": pdf_filename})
 
     logger.info("--- Strategy Generation Workflow Complete ---")
 
