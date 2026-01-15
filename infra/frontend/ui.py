@@ -5,6 +5,7 @@ import uuid
 import os
 from pathlib import Path
 import time
+from app.core.logger import logger
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 HISTORY_PATH = Path("reports") / "question_history.json"
@@ -236,19 +237,19 @@ if prompt := st.chat_input("분석하고 싶은 트렌드 주제를 입력해주
 
         pdf_path = st.session_state.last_pdf_path
         
-        # --- START OF DEBUGGING BLOCK ---
-        st.warning(f"디버깅 정보: `st.session_state.last_pdf_path` = `{pdf_path}`")
+        # --- START OF LOGGING DEBUG BLOCK ---
+        logger.info("--- UI DEBUGGING BLOCK START ---")
+        logger.info(f"Value of st.session_state.last_pdf_path: '{pdf_path}'")
         if pdf_path:
             pdf_file = Path(pdf_path)
             absolute_path = pdf_file.absolute()
             file_exists = pdf_file.exists()
             
-            st.info(f"디버깅 정보: `pdf_path` = `{pdf_path}`")
-            st.info(f"디버깅 정보: 확인 중인 절대 경로 = `{absolute_path}`")
-            st.info(f"디버깅 정보: `pdf_file.exists()` 결과 = `{file_exists}`")
+            logger.info(f"Resolved absolute path: '{absolute_path}'")
+            logger.info(f"Result of pdf_file.exists(): {file_exists}")
             
             if file_exists:
-                st.success("파일을 찾았습니다! 다운로드 버튼을 생성합니다.")
+                logger.info("File exists. Creating download button.")
                 st.download_button(
                     label="PDF 다운로드",
                     data=pdf_file.read_bytes(),
@@ -256,10 +257,10 @@ if prompt := st.chat_input("분석하고 싶은 트렌드 주제를 입력해주
                     mime="application/pdf"
                 )
             else:
-                st.error("파일 경로는 받았지만, 해당 경로에서 파일을 찾을 수 없습니다.")
+                logger.error("File path received, but file does not exist at that path.")
         else:
-            st.error("`st.session_state.last_pdf_path`에 PDF 경로가 없습니다.")
-        # --- END OF DEBUGGING BLOCK ---
+            logger.warning("No pdf_path found in session state.")
+        logger.info("--- UI DEBUGGING BLOCK END ---")
 
     st.session_state.messages.append({
         "role": "assistant",
