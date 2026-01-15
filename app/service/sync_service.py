@@ -5,16 +5,79 @@ from datetime import datetime, timedelta
 from app.service.vector_service import VectorService
 from app.core.logger import logger
 
+import re
+import pandas as pd
+import os
+from datetime import datetime, timedelta
+from typing import Dict, Any
+from app.service.vector_service import VectorService
+from app.core.logger import logger
+
 class SyncService:
     """
-    특정 형식의 트렌드 분석 CSV 파일을 Vector DB와 동기화하는 서비스
-    - 허용 파일명: (SNS)_(카테고리)_(날짜)_[N]d_real_data_keyword_frequencies.csv
-    - 정책: N일 보관, 빈도수 3 이상 적재, Rank 제외
+    특정 형식의 트렌드 분석 데이터를 Vector DB와 동기화하는 서비스
+    - 정책: N일 보관, 빈도수 3 이상 적재
     """
     
     def __init__(self, vector_service: VectorService):
         self.vector_service = vector_service
 
+    def sync_dataframe_to_db(self, df: pd.DataFrame, slots: Dict[str, Any], sns_name: str = "youtube"):
+        """DataFrame과 slots 정보를 기반으로 데이터를 DB에 적재합니다."""
+        
+        # 1. slots에서 정보 추출
+        category = slots.get("search_query", "unknown")
+        period_days = slots.get("period_days", 7)
+        current_date = datetime.now()
+        current_date_str = current_date.strftime("%Y%m%d")
+        current_date_int = int(current_date_str)
+        cutoff_date_int = int((current_date - timedelta(days=period_days)).strftime("%Y%m%d"))
+
+        logger.info(f"[SYNC] [{sns_name} | {category}] Syncing DataFrame to DB for date: {current_date_str}")
+
+        # 2. DB 정리 (오래된 데이터 및 오늘 데이터 삭제)
+        try:
+            self.vector_service.delete_by_metadata(filter={
+                "$and": [{"sns": sns_name}, {"category": category}, {"timestamp": {"$lt": cutoff_date_int}}]
+            })
+            self.vector_service.delete_by_metadata(filter={
+                "$and": [{"sns": sns_name}, {"category": category}, {"timestamp": current_date_int}]
+            })
+        except Exception as e:
+            logger.debug(f"[INFO] Note during DB cleanup: {e}")
+
+        # 3. 데이터 적재 준비 (빈도수 3 이상만)
+        documents, metadatas, ids = [], [], []
+        save_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        for _, row in df.iterrows():
+            kw = str(row['keyword']).strip()
+            count = int(row['frequency'])
+            
+            if count >= 3:
+                doc_text = f"[{sns_name} - {category}] '{kw}' 언급 빈도: {count}회 (기준일: {current_date_str})"
+                documents.append(doc_text)
+                metadatas.append({
+                    "sns": sns_name,
+                    "category": category,
+                    "keyword": kw,
+                    "count": count,
+                    "timestamp": current_date_int,
+                    "updated_at": save_time
+                })
+                ids.append(f"{sns_name}_{category}_{current_date_int}_{kw}")
+
+        # 4. 최종 Vector DB 적재
+        if ids:
+            self.vector_service.add_documents(documents=documents, metadatas=metadatas, ids=ids)
+            logger.info(f"[SUCCESS] Sync complete: {len(ids)} valid keywords saved to DB.")
+            
+            df_synced = pd.DataFrame(metadatas)[['keyword', 'count']].rename(columns={'count': 'frequency'})
+            df_synced = df_synced.sort_values(by='frequency', ascending=False)
+            logger.info(f"--- Top 5 Synced Keywords ---\n{df_synced.head(5).to_string(index=False)}")
+        else:
+            logger.warning(f"[WARNING] No data to load in DataFrame with frequency >= 3.")
+    
     def sync_csv_to_db(self, file_path: str):
         """지정한 파일의 이름 형식을 검증하고 데이터를 DB에 적재합니다."""
         base_name = os.path.basename(file_path)
@@ -108,5 +171,10 @@ class SyncService:
         if ids:
             self.vector_service.add_documents(documents=documents, metadatas=metadatas, ids=ids)
             logger.info(f"[SUCCESS] Sync complete: {len(ids)} valid keywords saved to DB.")
+
+            # 저장된 데이터의 상위 5개를 로깅하기 위한 로직 추가
+            df_synced = pd.DataFrame(metadatas)[['keyword', 'count']].rename(columns={'count': 'frequency'})
+            df_synced = df_synced.sort_values(by='frequency', ascending=False)
+            logger.info(f"--- Top 5 Synced Keywords ---\n{df_synced.head(5).to_string(index=False)}")
         else:
             logger.warning(f"[WARNING] No data to load in {base_name} with frequency >= 3.")

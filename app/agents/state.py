@@ -23,6 +23,11 @@ class TMState(TypedDict, total=False):
     retrieved: List[Dict[str, Any]]        # top 25 raw
     reranked: List[Dict[str, Any]]         # top 10 after judge
 
+    # --- Data flow between nodes ---
+    input_df_json: str # Serialized DataFrame for keyword extraction
+    base_export_path: str # Base path for exporting temp files if needed
+    frequencies_df_json: str # Serialized keyword frequencies DataFrame for DB sync
+
     # --- Keyword Extraction Outputs ---
     csv_path: str
     naver_blog_csv_path: str # 네이버 블로그 크롤링 결과 CSV 경로

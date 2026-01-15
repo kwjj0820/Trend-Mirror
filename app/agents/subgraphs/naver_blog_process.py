@@ -2,7 +2,6 @@
 from langgraph.graph import StateGraph, END
 from langchain_core.runnables import RunnableConfig
 from app.agents.state import TMState
-from app.agents.tools import naver_blog_crawling_tool
 from app.core.logger import logger
 from app.service.vector_service import VectorService
 import os

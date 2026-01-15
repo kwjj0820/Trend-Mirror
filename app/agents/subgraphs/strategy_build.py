@@ -16,7 +16,8 @@ Your job is to analyze the user's input and determine the intent.
 
 2. Slot Extraction (only for 'trendmirror'):
    - region: Target region (default: "Global" or "KR")
-   - period_days: Analysis period in days (default: 30)
+   - period_days: Analysis period in days (default: 7) 해당 사용자가 지난 몇 일간의 데이터를 원하는 지 분석해야 합니다.
+   - pages: Number of pages to crawl for YouTube (default: 10)
    - channels: Target channels (e.g., "Youtube", "Instagram", "Blog")
    - domain: The specific topic for trend analysis (e.g., "trend_food", "marketing_strategy", "카페 음식")
    - search_query: 'domain'이 속하는 가장 넓은 범위의 **핵심 카테고리 또는 유형**을 추출하세요. 이는 유튜브 크롤링 검색 쿼리로 사용됩니다. `domain`의 핵심적인 의미를 유지하면서도 검색 범위를 확장하여 더 많은 관련 데이터를 가져오는 데 목적이 있습니다. 최대한 단순하고 한 단어 형태에 가까워야 합니다.
@@ -31,13 +32,19 @@ Output strictly in JSON format:
     "channels": [],
     "domain": "...",
     "search_query": "..."
-  },
-  "cache_key": "generated_key_string"
+  }
 }
 """
 
 
 def strategy_build_node(state: TMState):
+    """
+    사용자 입력을 분석하여 의도를 파악하고, 캐시 존재 여부를 확인하여
+    전체 워크플로우를 실행할지, 아니면 캐시된 결과를 즉시 반환할지 결정합니다.
+    """
+    import os
+    from datetime import datetime
+
     logger.info("--- (1) Entered Strategy Builder Subgraph ---")
     user_input = state["user_input"]
     solar = get_solar_chat()
@@ -52,30 +59,49 @@ def strategy_build_node(state: TMState):
     response = solar.invoke(messages)
     parsed = clean_and_parse_json(response.content)
 
-    # [수정 포인트 1] 파싱 실패 시 기본 에러 메시지 반환
     if not parsed:
         logger.error("Failed to parse JSON from LLM response.")
-        return {
-            "intent": "chitchat",
-            "final_answer": "죄송합니다. 의도를 정확히 파악하지 못했습니다. 트렌드 분석을 원하시면 주제를 말씀해 주세요."
-        }
+        return { "intent": "chitchat", "final_answer": "죄송합니다. 의도를 정확히 파악하지 못했습니다." }
 
     intent = parsed.get("intent")
     logger.info(f"Intent analysis complete. Parsed parameters: {json.dumps(parsed, ensure_ascii=False)}")
-    logger.info("--- Strategy Builder Subgraph Finished ---")
 
-    # [수정 포인트 2] Chitchat인 경우 안내 메시지(final_answer) 추가
     if intent == "chitchat":
+        logger.info("--- Strategy Builder Subgraph Finished (Chitchat) ---")
         return {
             "intent": "chitchat",
             "final_answer": "안녕하세요! 저는 트렌드 분석 전문가 TrendMirror입니다. 👋\n분석하고 싶은 주제(예: '요즘 한국 유행 음식')를 말씀해 주시면 리포트를 작성해 드릴게요!"
         }
 
-    # TrendMirror 인텐트인 경우 기존 로직 유지
+    # --- 캐시 확인 로직 (핵심 추가 부분) ---
+    slots = parsed.get("slots", {})
+    search_query = slots.get("search_query")
+    period_days = slots.get("period_days", 30)
+
+    if search_query:
+        current_date = datetime.now().strftime("%Y%m%d")
+        category = "".join(c for c in search_query if c.isalnum())
+        
+        # strategy_gen_node에서 정의한 파일명 규칙과 정확히 일치시킴
+        pdf_filename = f"report_{category}_{period_days}d_{current_date}.pdf"
+        cache_filepath = os.path.join("reports", "cache", pdf_filename)
+        
+        if os.path.exists(cache_filepath):
+            logger.info(f"CACHE HIT! Found report at: {cache_filepath}")
+            logger.info("--- Strategy Builder Subgraph Finished (Cache Hit) ---")
+            return {
+                "intent": intent,
+                "cache_hit": True,
+                "final_pdf_path": cache_filepath,
+                "final_answer": "오늘 자로 생성된 캐시에서 기존 분석 결과를 찾았습니다. 바로 보여드릴게요!"
+            }
+
+    # 캐시 미스 시
+    logger.info("CACHE MISS. Starting full analysis workflow.")
+    logger.info("--- Strategy Builder Subgraph Finished (Cache Miss) ---")
     return {
         "intent": intent,
-        "slots": parsed.get("slots", {}),
-        "cache_key": parsed.get("cache_key"),
+        "slots": slots,
         "cache_hit": False
     }
 
