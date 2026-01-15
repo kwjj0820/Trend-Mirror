@@ -59,9 +59,18 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
                     response_format={"type": "json_object"},
                     timeout=120 
                 )
-                return json.loads(response.choices[0].message.content).get('results', [])
+                response_content = response.choices[0].message.content
+                logger.debug(f"LLM raw response content: {response_content}")
+                
+                response_data = json.loads(response_content)
+                results = response_data.get('results', [])
+                
+                if not results:
+                    logger.warning("LLM returned no 'results' or an empty 'results' list.")
+
+                return results
             except Exception as e:
-                logger.error(f"API 호출 중 오류 발생 (배치 건너뜀): {e}")
+                logger.error(f"API 호출 중 오류 발생 (배치 건너뜀): {e}", exc_info=True)
                 return []
 
         # 3. 루프 실행 (Progress Bar)

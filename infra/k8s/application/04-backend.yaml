@@ -28,6 +28,15 @@ spec:
         ports:
         - containerPort: 8000 # 요청하신 대로 8000번 포트 적용
 
+        # PVC 마운트 설정
+        volumeMounts:
+        - name: app-data
+          mountPath: /downloads
+          subPath: downloads
+        - name: app-data
+          mountPath: /reports
+          subPath: reports
+
         # 리소스 제한 (클러스터 안정성을 위해 필수)
         resources:
           requests:
@@ -51,6 +60,10 @@ spec:
             name: app-config
         - secretRef:
             name: app-secret
+      volumes:
+      - name: app-data
+        persistentVolumeClaim:
+          claimName: app-data-pvc
 ---
 # 2. Service: 클러스터 내부에 백엔드를 가리키는 주소입니다.
 # (외부 접속은 이후 Ingress 단계에서 처리합니다)

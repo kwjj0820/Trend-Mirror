@@ -33,7 +33,7 @@ COPY --from=builder /app/main.py /app/main.py
 COPY --from=builder /app/app /app/app
 COPY --from=builder /app/infra /app/infra
 COPY --from=builder /app/pyproject.toml /app/pyproject.toml
-COPY resources /app/resources
+COPY --from=builder /app/resources /app/resources
 # 파일 소유권 변경
 RUN chown -R appuser:appuser /app
 # 4. 가상환경을 기본 Python 경로로 설정 (별도 activate 불필요)
@@ -57,7 +57,7 @@ COPY --from=builder /app/.venv /app/.venv
 # 프론트엔드 코드 복사 (infra 폴더 등)
 COPY --from=builder /app/infra /app/infra
 COPY --from=builder /app/pyproject.toml /app/pyproject.toml
-COPY resources /app/resources
+COPY --from=builder /app/resources /app/resources
 # 가상환경 경로 설정
 ENV VIRTUAL_ENV=/app/.venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"

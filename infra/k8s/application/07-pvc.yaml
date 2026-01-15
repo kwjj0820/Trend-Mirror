@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data-pvc
+  namespace: trend-mirror
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi # 1GB of storage, can be adjusted
+  storageClassName: local-path # This might need to be changed based on the K8s environment (e.g., gp2 on AWS)
