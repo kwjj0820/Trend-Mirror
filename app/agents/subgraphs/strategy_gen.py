@@ -130,7 +130,7 @@ def strategy_gen_node(state: TMState, config: RunnableConfig):
 
     return {
         "final_answer": report_content,
-        "final_pdf_path": str(pdf_path)
+        "pdf_path": str(pdf_path)
     }
 
 # Graph Construction

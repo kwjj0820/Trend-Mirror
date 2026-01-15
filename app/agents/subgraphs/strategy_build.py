@@ -92,7 +92,7 @@ def strategy_build_node(state: TMState):
             return {
                 "intent": intent,
                 "cache_hit": True,
-                "final_pdf_path": cache_filepath,
+                "pdf_path": cache_filepath,
                 "final_answer": "오늘 자로 생성된 캐시에서 기존 분석 결과를 찾았습니다. 바로 보여드릴게요!"
             }
 
