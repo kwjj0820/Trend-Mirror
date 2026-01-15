@@ -1,6 +1,7 @@
 import pandas as pd
 import json
 import time
+import os
 from io import StringIO
 from langgraph.graph import StateGraph, END
 from langchain_core.runnables import RunnableConfig
@@ -22,7 +23,7 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
     vector_service: VectorService = config["configurable"].get("vector_service")
     
     try:
-        # 1. 데이터 로드
+        # 1. 데이터 로드 (input_df_json으로부터)
         input_df_json = state.get("input_df_json")
         base_export_path = state.get("base_export_path")
         slots = state.get("slots", {})
@@ -30,14 +31,13 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
         category = slots.get("search_query", domain)
 
         if not input_df_json or not base_export_path:
-            return {"error": "필수 데이터(JSON 또는 경로)가 누락되었습니다."}
-        
+            return {"error": "필수 데이터(JSON 또는 export 경로)가 누락되었습니다."}
+
         df = pd.read_json(StringIO(input_df_json), orient='split')
         logger.info(f"KE Node: 총 {len(df)}개의 데이터를 처리합니다. (도메인: {domain})")
 
         # 2. 키워드 추출 설정
         model_name = "solar-pro"
-        # [수정] 안정성을 위해 배치 사이즈를 20에서 10으로 축소
         batch_size = 10 
         client = get_solar_pro_chat_client()
         
@@ -53,7 +53,6 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
             user_prompt = f"아래 리스트를 분석해줘:\n{json.dumps(videos_batch, ensure_ascii=False)}"
             
             try:
-                # [수정] 타임아웃 120초 설정 및 에러 핸들링 강화
                 response = client.chat.completions.create(
                     model=model_name,
                     messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
@@ -75,7 +74,6 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
                 keywords = title_to_keywords.get(info['title'], [])
                 all_keywords.append(", ".join(keywords))
             
-            # API 과부하 방지를 위한 미세한 지연 (선택 사항)
             time.sleep(0.5)
 
         # 결과 병합
@@ -84,6 +82,8 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
 
         # 4. CSV 저장 및 벡터 DB 동기화
         output_path = f"{base_export_path}_with_keywords.csv"
+        # 파일 저장 전 디렉토리 존재 확인 및 생성
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         df_processed.to_csv(output_path, index=False, encoding='utf-8-sig')
 
         if vector_service and not df_processed.empty:
@@ -118,6 +118,7 @@ def keyword_extraction_node(state: TMState, config: RunnableConfig) -> dict:
 
         return {
             "frequencies_df_json": df_frequencies.to_json(orient='split', index=False),
+            "output_path": output_path,
             "error": None
         }
 

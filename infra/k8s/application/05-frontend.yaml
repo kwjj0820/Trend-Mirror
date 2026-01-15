@@ -1,0 +1,51 @@
+# 1. Deployment: 프론트엔드 UI 파드를 관리합니다.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: trend-mirror
+spec:
+  replicas: 1 # UI 서버는 상태(Session)를 가지는 경우가 많아 세션 관리가 없다면 1개로 시작합니다.
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        # GitHub Container Registry 주소 (실제 계정명과 프로젝트명으로 수정 필요)
+        image: ghcr.io/kwjj0820/trend-mirror-frontend:latest
+        ports:
+        - containerPort: 8002
+
+        # 리소스 제한 (UI는 백엔드보다 메모리를 더 쓸 수도 있음)
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+
+        # [핵심] 백엔드 연결 정보 주입
+        # K8s 내부 DNS 덕분에 IP가 아닌 서비스 이름(http://backend)으로 통신 가능
+        env:
+        - name: BACKEND_URL
+          value: "http://backend:8000" # 백엔드 서비스 이름과 포트(8000) 일치시킴
+---
+# 2. Service: 클러스터 내부에서 프론트엔드를 가리키는 주소입니다.
+# (외부 접속은 이후 Ingress 단계에서 처리합니다)
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: trend-mirror
+spec:
+  selector:
+    app: frontend
+  ports:
+  - port: 8002        # 서비스 포트
+    targetPort: 8002  # 컨테이너 포트

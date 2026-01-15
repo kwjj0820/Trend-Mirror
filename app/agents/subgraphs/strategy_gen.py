@@ -116,15 +116,13 @@ def strategy_gen_node(state: TMState, config: RunnableConfig):
     report_content = response.content
 
     # -----------------------------------------------------------
-    # 5. [수정] PDF Generation: 경로 단순화
+    # 5. PDF Generation: reports/ 폴더에 직접 저장
     # -----------------------------------------------------------
     current_date = datetime.datetime.now().strftime("%Y%m%d")
     
-    # 불필요한 cache_dir 관련 로직을 제거하여 reports/ 폴더 바로 아래에 저장되게 함
+    category = "".join(c for c in category if c.isalnum())
     pdf_filename = f"report_{category}_{period_days}d_{current_date}.pdf"
     
-    # from app.agents.tools import generate_report_pdf
-    # pdf_path = generate_report_pdf.invoke({"content": report_content, "filename": pdf_filename})
     from app.agents.tools import generate_report_pdf_v2_tool
     pdf_path = generate_report_pdf_v2_tool.invoke({"content": report_content, "filename": pdf_filename})
 

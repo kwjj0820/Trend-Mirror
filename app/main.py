@@ -1,4 +1,4 @@
-# app/main.py
+# app/main.py # Intentionally cause an error for debugging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import chat

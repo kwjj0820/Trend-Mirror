@@ -84,7 +84,7 @@ def strategy_build_node(state: TMState):
         
         # strategy_gen_node에서 정의한 파일명 규칙과 정확히 일치시킴
         pdf_filename = f"report_{category}_{period_days}d_{current_date}.pdf"
-        cache_filepath = os.path.join("reports", "cache", pdf_filename)
+        cache_filepath = os.path.join("reports", pdf_filename)
         
         if os.path.exists(cache_filepath):
             logger.info(f"CACHE HIT! Found report at: {cache_filepath}")

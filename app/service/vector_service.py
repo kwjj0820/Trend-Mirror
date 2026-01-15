@@ -41,27 +41,26 @@ class VectorService:
 
     def get_keyword_frequencies(self, category: str, sns: str, n_results: int = 100) -> List[Dict[str, Any]]:
         """
-        주어진 카테고리와 SNS에 대해 키워드 언급 빈도를 계산하여 반환합니다.
+        주어진 카테고리와 SNS에 대해 **개별 키워드**의 언급 빈도를 정확히 계산하여 반환합니다.
+        콤마로 구분된 키워드 문자열을 분리하여 각 키워드의 빈도를 집계합니다.
         """
-        # 해당 카테고리와 SNS에 대한 모든 문서를 가져옵니다.
-        # 주의: 이 방법은 모든 메타데이터를 로드하므로, 데이터 양이 매우 많을 경우 성능에 영향을 줄 수 있습니다.
-        # ChromaDB의 query 메서드는 n_results를 사용하지만, where 절만으로 모든 관련 문서를 가져오기 위해선
-        # n_results를 충분히 크게 설정하거나, ChromaDB의 collection.get 기능을 고려할 수 있습니다.
+        from collections import Counter
+
         results = self.vector_repository.get_by_metadata(
             where={"$and": [{"category": category}, {"sns": sns}]},
             include=['metadatas']
         )
-        # get_by_metadata는 n_results를 직접 받지 않으므로, 여기서 상위 N개 제한은 적용하지 않고,
-        # 모든 메타데이터를 가져온 후 Python 코드에서 빈도수를 계산합니다.
 
-        keyword_counts = {}
+        keyword_counts = Counter()
         if results and results['metadatas']:
             for meta in results['metadatas']:
-                keyword = meta.get("keyword")
-                count = meta.get("count", 0)
-                if keyword:
-                    keyword_counts[keyword] = keyword_counts.get(keyword, 0) + count
+                keywords_str = meta.get("keyword")
+                if keywords_str and isinstance(keywords_str, str):
+                    # 콤마로 구분된 키워드 문자열을 개별 키워드로 분리
+                    individual_keywords = [kw.strip() for kw in keywords_str.split(',') if kw.strip()]
+                    keyword_counts.update(individual_keywords)
         
-        # 빈도수 기준으로 정렬 후 n_results 만큼만 반환
-        sorted_keywords = sorted(keyword_counts.items(), key=lambda item: item[1], reverse=True)
-        return [{"keyword": kw, "frequency": count} for kw, count in sorted_keywords[:n_results]]
+        # 빈도수 기준으로 상위 n_results개의 키워드를 가져옴
+        most_common_keywords = keyword_counts.most_common(n_results)
+        
+        return [{"keyword": kw, "frequency": count} for kw, count in most_common_keywords]

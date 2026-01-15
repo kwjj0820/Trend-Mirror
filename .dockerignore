@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+
+# IDE
+.idea/
+.vscode/
+
+# Environment
+.env
+.env.example
+.venv/
+venv/
+ENV/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Runtime generated files
+logs/
+downloads/
+reports/
+chroma_tm/
+app.log
+app.pid
+ui.log
+ui.pid
+
+# Other
+*.sh
+uv.lock
+README.md

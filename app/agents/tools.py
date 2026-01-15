@@ -643,7 +643,7 @@ def generate_report_pdf_v2_tool(content: str, filename: str = "trendmirror_repor
 @tool
 def youtube_crawling_tool(query: str, days: int = 7, pages: int = 1) -> str:
     """
-    YouTube 트렌드 데이터를 수집하여 CSV 파일로 저장하고 그 경로를 반환합니다.
+    YouTube 트렌드 데이터를 수집하여 DataFrame을 JSON 문자열로 반환합니다.
     실제 app.repository.client.youtube_client를 사용합니다.
     """
     from app.repository.client.youtube_client import collect_youtube_trend_candidates_df
@@ -651,43 +651,38 @@ def youtube_crawling_tool(query: str, days: int = 7, pages: int = 1) -> str:
 
     logger.info(f"youtube_crawling_tool called with query='{query}', days='{days}', pages='{pages}'")
 
-    out_dir = "downloads"
-    pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
-
-    safe_query = "".join(c for c in query if c.isalnum())
-    current_date = datetime.datetime.now().strftime("%Y%m%d")
-    file_path = f"{out_dir}/youtube_{safe_query}_{current_date}_{days}d_real_data.csv"
-
     try:
         df = collect_youtube_trend_candidates_df(query=query, days=days, pages=pages)
-        df.to_csv(file_path, index=False, encoding="utf-8-sig")
-        return f"유튜브 검색 결과가 다음 경로에 CSV 파일로 저장되었습니다: {file_path}"
+        if df.empty:
+            logger.warning("YouTube crawling returned an empty DataFrame.")
+        # DataFrame을 JSON 문자열로 변환하여 반환
+        return df.to_json(orient='split', force_ascii=False)
     except Exception as e:
-        return f"Error during youtube crawling: {e}"
+        logger.error(f"Error during youtube crawling: {e}")
+        # 오류 발생 시 빈 DataFrame의 JSON을 반환
+        return pd.DataFrame().to_json(orient='split')
 
 
 # =========================
 # 5) Keyword Extraction Tool (LAZY IMPORT to avoid circular import)
 # =========================
 @tool
-def run_keyword_extraction(csv_path: str, slots: Dict[str, Any]) -> str:
+def run_keyword_extraction(input_df_json: str, base_export_path: str, slots: Dict[str, Any]) -> str:
     """
-    주어진 CSV 파일 경로에 대해 키워드 추출 워크플로우를 실행합니다.
-    입력: CSV 파일 경로, slots
+    주어진 DataFrame JSON 문자열에 대해 키워드 추출 워크플로우를 실행합니다.
+    입력: DataFrame JSON 문자열, base_export_path, slots
     출력: 처리 결과 메시지(JSON)
     """
-    # ✅ 여기서 import (순환 import 방지)
     from app.agents.subgraphs.keyword_extract import keyword_extraction_graph
 
-    if not isinstance(csv_path, str) or not csv_path.endswith(".csv"):
-        return "오류: 유효한 CSV 파일 경로를 입력해야 합니다. (예: 'downloads/youtube_dummy_data.csv')"
+    if not isinstance(input_df_json, str):
+        return json.dumps({"status": "error", "message": "입력 데이터가 유효한 JSON 문자열이 아닙니다."})
 
-    cleaned_path = csv_path
-
-    if not os.path.exists(cleaned_path):
-        return f"오류: 파일이 존재하지 않습니다: {cleaned_path}"
-
-    initial_state = {"csv_path": cleaned_path, "slots": slots}
+    initial_state = {
+        "input_df_json": input_df_json,
+        "base_export_path": base_export_path,
+        "slots": slots
+    }
     final_state = keyword_extraction_graph.invoke(initial_state)
 
     if final_state.get("error"):
@@ -696,8 +691,8 @@ def run_keyword_extraction(csv_path: str, slots: Dict[str, Any]) -> str:
     return json.dumps(
         {
             "status": "success",
-            "input_path": cleaned_path,
             "output_path": final_state.get("output_path"),
+            "frequencies_df_json": final_state.get("frequencies_df_json"),
         },
         ensure_ascii=False,
     )

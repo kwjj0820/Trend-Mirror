@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+ name: app-config # Pod에서 이 이름을 참조하여 환경 변수를 가져옵니다.
+ namespace: trend-mirror # 앞서 만든 namespace에 생성합니다.
+data:
+ # 1. 내부 서비스 연결 정보
+ CHROMA_MODE: "server"
+ CHROMA_HOST: "chromadb"
+ CHROMA_PORT: "8800"
+ SEED_URL: "${SEED_URL}"
+ UPSTAGE_API_KEY: "${UPSTAGE_API_KEY}"
+ YOUTUBE_API_KEY: "${YOUTUBE_API_KEY}"
+ TAVILY_API_KEY: ${TAVILY_API_KEY}"
