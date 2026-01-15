@@ -47,6 +47,8 @@ if "messages" not in st.session_state:
 
 if "question_history" not in st.session_state:
     st.session_state.question_history = {}
+if "last_pdf_path" not in st.session_state:
+    st.session_state.last_pdf_path = None
 
 
 def load_history() -> dict:
@@ -202,6 +204,9 @@ def response_generator(prompt, session_id):
 
         data = r.json()
         answer = data.get("answer") or data.get("result") or str(data)
+        pdf_path = data.get("pdf_path")
+        if pdf_path:
+            st.session_state.last_pdf_path = pdf_path
 
         status.update(label="분석 완료", state="complete", expanded=False)
         yield answer
@@ -228,6 +233,17 @@ if prompt := st.chat_input("분석하고 싶은 트렌드 주제를 입력해주
         full_response = st.write_stream(
             response_generator(prompt, st.session_state.session_id)
         )
+
+        pdf_path = st.session_state.last_pdf_path
+        if pdf_path:
+            pdf_file = Path(pdf_path)
+            if pdf_file.exists():
+                st.download_button(
+                    label="PDF 다운로드",
+                    data=pdf_file.read_bytes(),
+                    file_name=pdf_file.name,
+                    mime="application/pdf"
+                )
 
     st.session_state.messages.append({
         "role": "assistant",
