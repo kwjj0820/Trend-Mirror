@@ -22,7 +22,7 @@ spec:
         ports:
         - containerPort: 8002
 
-        # 리소스 제한 (UI는 백엔드보다 메모리를 더 쓸 수도 있음)
+        # 리소스 제한 (UI는 백엔드보다 메모리를 더 쓸 수도 있음)gi
         resources:
           requests:
             cpu: "100m"

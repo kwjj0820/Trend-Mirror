@@ -1,0 +1,98 @@
+name: Build & Version & Push Image (GHCR)
+on:
+  push:
+    branches: [ deploy ] # 각자의 브랜치나 메인으로 수정하면 됩니다.
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate version tag (pyproject + git)
+        id: version
+        run: |
+          set -euo pipefail
+
+          # pyproject.toml이 없는 경우를 대비
+          if [ ! -f pyproject.toml ]; then
+            echo "Error: pyproject.toml not found"
+            exit 1
+          fi
+          # 버전 조합: {pyproject버전}-{git해시}
+          PYPROJECT_VERSION=$(grep '^version' pyproject.toml | cut -d '"' -f2)
+          GIT_SHA=$(git rev-parse --short=7 HEAD)
+          VERSION_TAG="${PYPROJECT_VERSION}-${GIT_SHA}"
+          echo "version_tag=${VERSION_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Generated version: ${VERSION_TAG}"
+      - name: Set image name and repo name
+        run: |
+          # 이미지 경로 (소문자 변환)
+          FULL_REPO_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=ghcr.io/${FULL_REPO_NAME}" >> $GITHUB_ENV
+
+          # 리포지토리 이름 (폴더 경로용)
+          REPO_ONLY=$(echo '${{ github.repository }}' | awk -F '/' '{print $2}' | tr '[:upper:]' '[:lower:]')
+          echo "REPO_NAME=${REPO_ONLY}" >> $GITHUB_ENV
+      - name: Build & Push
+        run: |
+          set -euo pipefail
+          VERSION_TAG="${{ steps.version.outputs.version_tag }}"
+          # Backend 빌드 및 푸시
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --target backend \
+            -t "${IMAGE_NAME}-backend:${VERSION_TAG}" \
+            -t "${IMAGE_NAME}-backend:latest" \
+            --push .
+          # Frontend 빌드 및 푸시
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --target frontend \
+            -t "${IMAGE_NAME}-frontend:${VERSION_TAG}" \
+            -t "${IMAGE_NAME}-frontend:latest" \
+            --push .
+      - name: Deploy on K8s
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            # 변수 설정
+            REPO_NAME="${{ env.REPO_NAME }}"
+            IMAGE_NAME="${{ env.IMAGE_NAME }}"
+            VERSION_TAG="${{ steps.version.outputs.version_tag }}"
+
+            # K8s 매니페스트 경로로 이동
+            # 각자의 EC2에 코드가 위치한 경로에서 실행하면 됩니다.
+            cd "/home/ubuntu/deploy/${REPO_NAME}/infra/k8s/application"
+            echo "Deploying version: ${VERSION_TAG}"
+            # 1. 파일 상태 초기화 (이전 작업 잔재 제거)
+            git checkout 04-backend.yaml
+            git checkout 05-frontend.yaml
+
+            # 2. 이미지 태그 업데이트 (sed 사용)
+            sed -i "s|image: ${IMAGE_NAME}-backend:.*|image: ${IMAGE_NAME}-backend:${VERSION_TAG}|g" 04-backend.yaml
+            sed -i "s|image: ${IMAGE_NAME}-frontend:.*|image: ${IMAGE_NAME}-frontend:${VERSION_TAG}|g" 05-frontend.yaml
+
+            # 3. 변경된 설정 적용
+            kubectl apply -f 04-backend.yaml
+            kubectl apply -f 05-frontend.yaml
+
+            # 4. 다음 배포를 위해 파일 상태 원상복구 (중요)
+            git checkout 04-backend.yaml
+            git checkout 05-frontend.yaml
+
+            echo "Deployment triggered successfully."
