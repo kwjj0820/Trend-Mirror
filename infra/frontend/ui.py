@@ -1,8 +1,15 @@
+
+
 import streamlit as st
 import json
 import httpx
 import uuid
 import os
+import sys
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.abspath(os.path.join(current_dir, "../../")) # infra/frontend/ 니까 두 번 올라감
+sys.path.append(root_dir)
+
 from pathlib import Path
 import time
 from app.core.logger import logger
