@@ -1,5 +1,6 @@
 # app/service/vector_service.py
 from typing import List, Dict, Any
+from datetime import datetime, timedelta
 from app.service.embedding_service import EmbeddingService
 from app.repository.vector.vector_repo import ChromaDBRepository
 
@@ -10,20 +11,14 @@ class VectorService:
         self.embedding_service = embedding_service
 
     def add_documents(self, documents: List[str], metadatas: List[Dict[str, Any]] = None, ids: List[str] = None):
-        # 1. 텍스트 -> 임베딩 변환
         embeddings = self.embedding_service.create_embeddings(documents)
-        # 2. DB 저장 (Upsert)
         self.vector_repository.add_documents(documents=documents, embeddings=embeddings, metadatas=metadatas, ids=ids)
 
     def search(self, query: str, n_results: int = 25) -> List[Dict[str, Any]]:
-        # 1. 질문 -> 임베딩 변환
         query_embedding = self.embedding_service.create_embedding(query)
-        # 2. DB 검색
         results = self.vector_repository.query(query_embeddings=[query_embedding], n_results=n_results)
-
-        # 3. 노트북과 동일한 반환 포맷으로 변환 (List of Dicts)
         out = []
-        if results['ids']:
+        if results.get('ids') and results['ids'][0]:
             for i in range(len(results['ids'][0])):
                 out.append({
                     "chunk_id": results["ids"][0][i],
@@ -34,33 +29,115 @@ class VectorService:
         return out
 
     def delete_by_metadata(self, filter: Dict[str, Any]):
-        """
-        메타데이터 필터를 기반으로 문서를 삭제합니다.
-        """
         return self.vector_repository.delete(where=filter)
 
-    def get_keyword_frequencies(self, category: str, sns: str, n_results: int = 100) -> List[Dict[str, Any]]:
-        """
-        주어진 카테고리와 SNS에 대해 **개별 키워드**의 언급 빈도를 정확히 계산하여 반환합니다.
-        콤마로 구분된 키워드 문자열을 분리하여 각 키워드의 빈도를 집계합니다.
-        """
+    def get_keyword_frequencies(self, category: str, sns: str, n_results: int = 100, start_date: str = None, end_date: str = None) -> List[Dict[str, Any]]:
         from collections import Counter
+        where_filter = {"$and": [{"category": category}, {"sns": sns}]}
+        
+        if start_date and end_date:
+            start_dt = datetime.strptime(f"{start_date}T00:00:00", "%Y-%m-%dT%H:%M:%S")
+            end_dt = datetime.strptime(f"{end_date}T23:59:59", "%Y-%m-%dT%H:%M:%S")
+            where_filter["$and"].append({"published_at": {"$gte": start_dt.timestamp()}})
+            where_filter["$and"].append({"published_at": {"$lte": end_dt.timestamp()}})
 
-        results = self.vector_repository.get_by_metadata(
-            where={"$and": [{"category": category}, {"sns": sns}]},
-            include=['metadatas']
-        )
-
+        from app.core.logger import logger # Import logger locally for debugging
+        logger.debug(f"ChromaDB where filter: {where_filter}")
+        
+        results = self.vector_repository.get_by_metadata(where=where_filter, include=['metadatas'])
         keyword_counts = Counter()
-        if results and results['metadatas']:
+        if results and results.get('metadatas'):
             for meta in results['metadatas']:
                 keywords_str = meta.get("keyword")
                 if keywords_str and isinstance(keywords_str, str):
-                    # 콤마로 구분된 키워드 문자열을 개별 키워드로 분리
                     individual_keywords = [kw.strip() for kw in keywords_str.split(',') if kw.strip()]
                     keyword_counts.update(individual_keywords)
         
-        # 빈도수 기준으로 상위 n_results개의 키워드를 가져옴
-        most_common_keywords = keyword_counts.most_common(n_results)
+        return [{"keyword": kw, "frequency": count} for kw, count in keyword_counts.most_common(n_results)]
+
+    def get_sentiment_frequencies(self, category: str, sns: str, n_results: int = 100, start_date: str = None, end_date: str = None) -> List[Dict[str, Any]]:
+        from collections import Counter
+        where_filter = {"$and": [{"category": category}, {"sns": sns}]}
+
+        if start_date and end_date:
+            start_dt = datetime.strptime(f"{start_date}T00:00:00", "%Y-%m-%dT%H:%M:%S")
+            end_dt = datetime.strptime(f"{end_date}T23:59:59", "%Y-%m-%dT%H:%M:%S")
+            where_filter["$and"].append({"published_at": {"$gte": start_dt.timestamp()}})
+            where_filter["$and"].append({"published_at": {"$lte": end_dt.timestamp()}})
+
+        results = self.vector_repository.get_by_metadata(where=where_filter, include=['metadatas'])
+        sentiment_counts = Counter()
+        if results and results.get('metadatas'):
+            for meta in results['metadatas']:
+                sentiment_str = meta.get("sentiment")
+                if sentiment_str and isinstance(sentiment_str, str):
+                    sentiment_counts.update([sentiment_str])
         
-        return [{"keyword": kw, "frequency": count} for kw, count in most_common_keywords]
+        most_common_sentiments = sentiment_counts.most_common(n_results)
+        
+        return [{"sentiment": s, "frequency": count} for s, count in most_common_sentiments]
+
+    def get_documents_for_period(self, category: str, sns: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+        """
+        주어진 기간 내의 모든 문서 메타데이터를 반환합니다.
+        """
+        where_filter = {"$and": [{"category": category}, {"sns": sns}]}
+        
+        if start_date and end_date:
+            start_dt = datetime.strptime(f"{start_date}T00:00:00", "%Y-%m-%dT%H:%M:%S")
+            end_dt = datetime.strptime(f"{end_date}T23:59:59", "%Y-%m-%dT%H:%M:%S")
+            where_filter["$and"].append({"published_at": {"$gte": start_dt.timestamp()}})
+            where_filter["$and"].append({"published_at": {"$lte": end_dt.timestamp()}})
+
+        from app.core.logger import logger
+        logger.debug(f"ChromaDB filter for get_documents_for_period: {where_filter}")
+        
+        results = self.vector_repository.get_by_metadata(where=where_filter, include=['metadatas'])
+        
+        if results and results.get('metadatas'):
+            return results['metadatas']
+        
+        return []
+
+    def check_data_existence(self, category: str, start_date: str, end_date: str) -> Dict[str, Any]:
+        user_start_ts = datetime.strptime(f"{start_date}T00:00:00", "%Y-%m-%dT%H:%M:%S").timestamp()
+        user_end_ts = datetime.strptime(f"{end_date}T23:59:59", "%Y-%m-%dT%H:%M:%S").timestamp()
+
+        results = self.vector_repository.get_by_metadata(where={"category": category}, include=['metadatas'])
+
+        if not results or not results.get('metadatas'):
+            return {"status": "NONE", "new_start": start_date, "new_end": end_date}
+
+        published_timestamps = [meta['published_at'] for meta in results['metadatas'] if meta.get('published_at') and isinstance(meta['published_at'], (int, float))]
+        
+        if not published_timestamps:
+            return {"status": "NONE", "new_start": start_date, "new_end": end_date}
+
+        db_min_ts = min(published_timestamps)
+        db_max_ts = max(published_timestamps)
+        db_min_dt = datetime.fromtimestamp(db_min_ts)
+        db_max_dt = datetime.fromtimestamp(db_max_ts)
+
+        if db_min_ts <= user_start_ts and db_max_ts >= user_end_ts:
+            return {"status": "FULL", "db_start": db_min_dt.strftime("%Y-%m-%d"), "db_end": db_max_dt.strftime("%Y-%m-%d")}
+
+        if user_end_ts < db_min_ts or user_start_ts > db_max_ts:
+            return {"status": "NONE", "new_start": start_date, "new_end": end_date}
+        
+        new_start_dt = datetime.fromtimestamp(user_start_ts)
+        new_end_dt = datetime.fromtimestamp(user_end_ts)
+        
+        if user_start_ts < db_min_ts and user_end_ts > db_max_ts:
+            pass
+        elif user_start_ts < db_min_ts:
+            new_end_dt = db_min_dt - timedelta(days=1)
+        elif user_end_ts > db_max_ts:
+            new_start_dt = db_max_dt + timedelta(days=1)
+        
+        return {
+            "status": "PARTIAL",
+            "new_start": new_start_dt.strftime("%Y-%m-%d"),
+            "new_end": new_end_dt.strftime("%Y-%m-%d"),
+            "db_start": db_min_dt.strftime("%Y-%m-%d"),
+            "db_end": db_max_dt.strftime("%Y-%m-%d")
+        }

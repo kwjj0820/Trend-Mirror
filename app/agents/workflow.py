@@ -1,31 +1,81 @@
 # app/agents/workflow.py
 import pandas as pd
 from io import StringIO
+from datetime import datetime, timedelta
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.runnables import RunnableConfig
 from app.agents.state import TMState
 from app.agents.subgraphs.strategy_build import strategy_build_graph
-from app.agents.subgraphs.insight_extract import insight_extract_graph
-from app.agents.subgraphs.strategy_gen import strategy_gen_graph
+from app.agents.subgraphs.strategy_gen import analysis_graph # 이름 변경
+from app.agents.subgraphs.visualization_gen import visualization_graph # 신규 추가
 from app.agents.subgraphs.youtube_process import youtube_process_graph
 from app.core.logger import logger
 from app.service.sync_service import SyncService
+from app.service.vector_service import VectorService
+
+
+def cache_check_node(state: TMState, config: RunnableConfig):
+    """
+    DB 데이터 존재 여부를 확인하고, 그 결과에 따라 state를 업데이트합니다.
+    """
+    logger.info("--- (CACHE) Entered Cache Check Node ---")
+    vector_service: VectorService = config["configurable"].get("vector_service")
+    slots = state.get("slots", {})
+    search_query = slots.get("search_query")
+    period_days = slots.get("period_days", 7)
+
+    if not vector_service or not search_query:
+        logger.warning("VectorService or search_query not found. Skipping cache check.")
+        return {"cache_hit": False}
+
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=period_days)
+    start_date_str = start_date.strftime("%Y-%m-%d")
+    end_date_str = end_date.strftime("%Y-%m-%d")
+
+    cache_check_result = vector_service.check_data_existence(
+        category=search_query,
+        start_date=start_date_str,
+        end_date=end_date_str
+    )
+    
+    cache_status = cache_check_result.get("status")
+    logger.info(f"DB Cache Check Status for '{search_query}': {cache_status}")
+
+    if cache_status == "FULL":
+        logger.info("Cache Hit (FULL): Data exists in DB. Skipping crawling and analysis.")
+        return {"cache_hit": True}
+    
+    elif cache_status == "PARTIAL":
+        logger.info("Cache Hit (PARTIAL): Partially exists. Adjusting crawl period.")
+        new_start_str = cache_check_result.get("new_start")
+        new_end_str = cache_check_result.get("new_end")
+        
+        new_start_dt = datetime.strptime(new_start_str, "%Y-%m-%d")
+        new_end_dt = datetime.strptime(new_end_str, "%Y-%m-%d")
+        new_period_days = (new_end_dt - new_start_dt).days + 1
+
+        slots["period_days"] = new_period_days
+        logger.info(f"Updated period_days for partial crawling: {new_period_days} days")
+        return {"slots": slots, "cache_hit": False}
+
+    return {"cache_hit": False}
 
 
 def router_node(state: TMState):
-    """Build 단계 결과에 따른 분기 처리"""
+    """분기 노드: 캐시 히트 여부와 의도에 따라 다음 단계를 결정"""
     intent = state.get("intent")
     if intent == "chitchat":
-        logger.info("[Router] Routing to END (Chitchat)")
+        logger.info("[Router] Intent is chitchat. Routing to END.")
         return END
 
     if state.get("cache_hit"):
-        logger.info("[Router] Cache Hit! Skipping data processing.")
-        return "strategy_gen"
+        logger.info("[Router] Cache Hit! Skipping to Visualization.")
+        # 캐시가 있으면 데이터 수집 및 분석을 건너뛰고 바로 시각화로 이동
+        return "visualization"
 
-    # Cache miss인 경우, 항상 youtube_process 에이전트로 라우팅
-    logger.info("[Router] No cache hit. Routing to YouTube Processing Subgraph.")
+    logger.info("[Router] Cache Miss. Routing to Data Collection (youtube_process).")
     return "youtube_process"
 
 
@@ -36,12 +86,8 @@ def sync_db_node(state: TMState, config: RunnableConfig):
     frequencies_df_json = state.get("frequencies_df_json")
     slots = state.get("slots")
 
-    if not sync_service:
-        logger.warning("SyncService not found in config. Skipping DB sync.")
-        return {}
-    
-    if not frequencies_df_json:
-        logger.warning("Frequencies DataFrame JSON not found in state. Skipping DB sync.")
+    if not sync_service or not frequencies_df_json or not slots:
+        logger.warning("Skipping DB sync due to missing service, data, or slots.")
         return {}
 
     try:
@@ -57,33 +103,35 @@ def sync_db_node(state: TMState, config: RunnableConfig):
 # 메인 그래프 정의
 workflow = StateGraph(TMState)
 
-# 서브그래프들을 노드로 등록
+# 노드 등록
 workflow.add_node("strategy_build", strategy_build_graph)
-workflow.add_node("insight_extract", insight_extract_graph)
+workflow.add_node("cache_check", cache_check_node)
 workflow.add_node("youtube_process", youtube_process_graph)
-workflow.add_node("sync_db", sync_db_node) # 새 노드 추가
-workflow.add_node("strategy_gen", strategy_gen_graph)
+workflow.add_node("sync_db", sync_db_node)
+workflow.add_node("analysis", analysis_graph) # 이름 변경
+workflow.add_node("visualization", visualization_graph) # 신규 추가
 
-# 흐름 정의
+# 엣지(흐름) 정의
 workflow.set_entry_point("strategy_build")
+workflow.add_edge("strategy_build", "cache_check")
 
+# 캐시 체크 후 분기
 workflow.add_conditional_edges(
-    "strategy_build",
+    "cache_check",
     router_node,
     {
-        "insight_extract": "insight_extract",
-        "youtube_process": "youtube_process",
-        "strategy_gen": "strategy_gen",
+        "youtube_process": "youtube_process", # Cache Miss
+        "visualization": "visualization",   # Cache Hit
         END: END
     }
 )
 
-workflow.add_edge("insight_extract", "strategy_gen")
-# 워크플로우 흐름 수정
+# 데이터 수집 및 분석 후 시각화로 이어지는 기본 흐름
 workflow.add_edge("youtube_process", "sync_db")
-workflow.add_edge("sync_db", "strategy_gen")
-workflow.add_edge("strategy_gen", END)
+workflow.add_edge("sync_db", "analysis")
+workflow.add_edge("analysis", "visualization")
+workflow.add_edge("visualization", END)
 
-# 체크포인터 (대화 문맥 기억)
+# 체크포인터
 memory = MemorySaver()
 super_graph = workflow.compile(checkpointer=memory)
