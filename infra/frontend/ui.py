@@ -7,6 +7,7 @@ from pathlib import Path
 import time
 import pandas as pd
 import altair as alt
+from collections import Counter
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 HISTORY_PATH = Path("reports") / "question_history.json"
@@ -572,6 +573,9 @@ def response_generator(prompt, session_id):
     try:
         status = st.status("trend mirror 에이전트가 분석 중입니다....", expanded=True)
 
+        # 검색 쿼리를 세션 상태에 저장 (CSV 파일명으로 사용)
+        st.session_state.last_search_query = prompt
+
         r = httpx.post(
             f"{BACKEND_URL}/api/v1/chat",
             json={
@@ -617,6 +621,105 @@ def response_generator(prompt, session_id):
     except Exception as e:
         yield f"연결 오류: {str(e)}"
 
+
+def find_most_frequent_keyword(df):
+    """DataFrame에서 가장 빈도수가 높은 키워드를 찾는 함수"""
+    # trend_keywords 컬럼의 모든 키워드를 수집
+    all_keywords = []
+    for keywords_str in df['trend_keywords'].dropna():
+        if keywords_str.strip():  # 빈 문자열이 아닌 경우
+            # 쉼표로 분리하고 각 키워드 정리
+            keywords = [k.strip() for k in keywords_str.split(',') if k.strip()]
+            all_keywords.extend(keywords)
+
+    # 키워드 빈도 계산
+    keyword_counts = Counter(all_keywords)
+
+    # 가장 빈도수가 높은 키워드 찾기
+    if keyword_counts:
+        most_common_keyword, count = keyword_counts.most_common(1)[0]
+        return most_common_keyword, count, keyword_counts
+    return None, 0, Counter()
+
+def get_top_videos_by_keyword_and_views(df, keyword, top_n=3):
+    """특정 키워드를 포함하고 조회수가 높은 상위 N개 영상 반환"""
+    # viewCount를 숫자로 변환 (문자열일 수 있음)
+    df['viewCount'] = pd.to_numeric(df['viewCount'], errors='coerce')
+
+    # 키워드가 포함된 행 필터링
+    filtered_df = df[df['trend_keywords'].str.contains(keyword, case=False, na=False)]
+
+    # 조회수로 정렬하여 상위 N개 선택
+    top_videos = filtered_df.nlargest(top_n, 'viewCount')
+
+    return top_videos[['title', 'channel_title', 'viewCount', 'trend_keywords', 'video_id']]
+
+def get_csv_path_by_search_query(search_query):
+    """서치 쿼리를 기반으로 CSV 파일 경로를 반환"""
+    downloads_dir = Path("downloads")
+    if not downloads_dir.exists():
+        return None
+
+    # 가장 최근의 모든 CSV 파일을 가져옴
+    all_csv_files = list(downloads_dir.glob("youtube_*with_keywords.csv"))
+
+    if all_csv_files:
+        # 가장 최근 파일 선택 (수정 시간 기준)
+        latest_file = max(all_csv_files, key=lambda x: x.stat().st_mtime)
+        return latest_file
+
+    return None
+
+def render_top_videos_by_frequent_keyword(search_query):
+    """가장 빈도수가 높은 키워드를 갖는 상위 조회수 영상 3개를 표시"""
+    csv_path = get_csv_path_by_search_query(search_query)
+
+    if not csv_path or not csv_path.exists():
+        st.warning(f"CSV 파일을 찾을 수 없습니다: {search_query}")
+        return
+
+    try:
+        df = pd.read_csv(csv_path)
+
+        # 가장 빈도수가 높은 키워드 찾기
+        most_keyword, count, all_counts = find_most_frequent_keyword(df)
+
+        if not most_keyword:
+            st.warning("키워드를 찾을 수 없습니다.")
+            return
+
+        # 해당 키워드를 갖는 상위 3개 영상 추출
+        top_videos = get_top_videos_by_keyword_and_views(df, most_keyword, 3)
+
+        if top_videos.empty:
+            st.warning(f"'{most_keyword}' 키워드를 포함한 영상을 찾을 수 없습니다.")
+            return
+
+        st.subheader(f"🔥 가장 인기 있는 키워드: '{most_keyword}' (빈도: {count})")
+        st.markdown(f"**'{most_keyword}'** 키워드를 포함한 조회수 상위 3개 영상:")
+
+        for idx, (_, row) in enumerate(top_videos.iterrows(), 1):
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+
+                with col1:
+                    st.markdown(f"**{idx}. {row['title']}**")
+                    st.caption(f"채널: {row['channel_title']}")
+                    st.caption(f"키워드: {row['trend_keywords']}")
+
+                with col2:
+                    # YouTube 썸네일 URL 생성 (video_id 활용)
+                    thumbnail_url = f"https://img.youtube.com/vi/{row['video_id']}/maxresdefault.jpg"
+                    st.image(thumbnail_url, width=120)
+
+                    # 조회수 포맷팅
+                    view_count = f"{int(row['viewCount']):,}"
+                    st.metric("조회수", view_count)
+
+                st.markdown("---")
+
+    except Exception as e:
+        st.error(f"영상 분석 중 오류 발생: {str(e)}")
 
 def render_latest_results():
     keyword_frequencies = st.session_state.get("last_keyword_frequencies")
@@ -694,6 +797,12 @@ def render_latest_results():
                 )
         else:
             st.caption(f"PDF 파일을 찾을 수 없습니다: {pdf_file}")
+
+    # 가장 빈도수가 높은 키워드의 상위 조회수 영상 표시
+    search_query = st.session_state.get("last_search_query")
+    if search_query:
+        st.markdown("---")
+        render_top_videos_by_frequent_keyword(search_query)
 
 
 if prompt := st.chat_input("분석하고 싶은 트렌드 주제를 입력해주세요."):
