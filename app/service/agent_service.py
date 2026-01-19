@@ -37,7 +37,9 @@ class AgentService:
                 "answer": result.get("final_answer", "죄송합니다. 답변을 생성하지 못했습니다."),
                 "pdf_path": result.get("pdf_path"),
                 "status": "success",
-                "logs": result.get("logs", [])
+                "logs": result.get("logs", []),
+                "keyword_frequencies": result.get("keyword_frequencies"),
+                "daily_sentiments": result.get("daily_sentiments"),
             }
         except Exception as e:
             print(f"!!! CRITICAL ERROR in AgentService.run_agent: {e}")

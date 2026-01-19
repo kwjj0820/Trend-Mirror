@@ -589,24 +589,111 @@ def response_generator(prompt, session_id):
 
         data = r.json()
         answer = data.get("answer") or data.get("result") or str(data)
-        
-        # Clear previous chart data
+        process_status = data.get("process_status")
+
+        if process_status == "fail":
+            status.update(label="오류", state="error")
+            yield answer
+            return
+
+        # Clear previous chart data on successful response
         st.session_state.last_keyword_frequencies = None
         st.session_state.last_daily_sentiments = None
 
         keyword_frequencies = data.get("keyword_frequencies") # Retrieve new data
         daily_sentiments = data.get("daily_sentiments") # Retrieve new data
+        pdf_path = data.get("pdf_path")
 
         if keyword_frequencies: # Store in session state
             st.session_state.last_keyword_frequencies = keyword_frequencies
         if daily_sentiments: # Store in session state
             st.session_state.last_daily_sentiments = daily_sentiments
+        if pdf_path:
+            st.session_state.last_pdf_path = pdf_path
 
         status.update(label="분석 완료", state="complete", expanded=False)
         yield answer
 
     except Exception as e:
         yield f"연결 오류: {str(e)}"
+
+
+def render_latest_results():
+    keyword_frequencies = st.session_state.get("last_keyword_frequencies")
+    daily_sentiments = st.session_state.get("last_daily_sentiments")
+    pdf_path = st.session_state.get("last_pdf_path")
+
+    if not (keyword_frequencies or daily_sentiments or pdf_path):
+        return
+
+    st.subheader("분석 결과")
+
+    if keyword_frequencies:
+        st.subheader("키워드 언급 빈도")
+        df_keywords = pd.DataFrame(keyword_frequencies)
+        if not df_keywords.empty:
+            chart = alt.Chart(df_keywords).mark_arc().encode(
+                theta=alt.Theta(field="frequency", type="quantitative"),
+                color=alt.Color(field="keyword", type="nominal", title="키워드")
+            ).properties(
+                title="키워드별 언급 빈도"
+            )
+            st.altair_chart(chart, use_container_width=True)
+            with st.expander("Keyword data table"):
+                st.dataframe(df_keywords, use_container_width=True, hide_index=True)
+
+    if daily_sentiments:
+        st.subheader("일별 감성 변화")
+        df_sentiments = pd.DataFrame(daily_sentiments)
+        if not df_sentiments.empty:
+            df_sentiments["date"] = pd.to_datetime(df_sentiments["date"])
+
+            df_sentiments_melted = df_sentiments.melt(
+                id_vars=["date"],
+                value_vars=["positive", "neutral", "negative"],
+                var_name="sentiment",
+                value_name="count"
+            )
+
+            chart = alt.Chart(df_sentiments_melted).mark_bar().encode(
+                x=alt.X("date:T", title="날짜"),
+                y=alt.Y("count:Q", title="언급 빈도"),
+                color=alt.Color(
+                    "sentiment:N",
+                    scale=alt.Scale(
+                        domain=["positive", "neutral", "negative"],
+                        range=["#2ecc71", "#95a5a6", "#e74c3c"]
+                    ),
+                    title="감성"
+                ),
+                order=alt.Order(
+                  "sentiment",
+                  sort="ascending"
+                )
+            ).properties(
+                title="일별 감성 변화 추이"
+            )
+            st.altair_chart(chart, use_container_width=True)
+            with st.expander("Daily sentiment data table"):
+                st.dataframe(
+                    df_sentiments.sort_values("date"),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+    if pdf_path:
+        pdf_file = Path(pdf_path)
+        if pdf_file.exists():
+            with pdf_file.open("rb") as f:
+                st.download_button(
+                    label="리포트 PDF 다운로드",
+                    data=f,
+                    file_name=pdf_file.name,
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+        else:
+            st.caption(f"PDF 파일을 찾을 수 없습니다: {pdf_file}")
 
 
 if prompt := st.chat_input("분석하고 싶은 트렌드 주제를 입력해주세요."):
@@ -637,57 +724,6 @@ if prompt := st.chat_input("분석하고 싶은 트렌드 주제를 입력해주
             response_generator(prompt_for_model, st.session_state.session_id)
         )
 
-        # Display Keyword Frequencies Pie Chart
-        keyword_frequencies = st.session_state.get("last_keyword_frequencies")
-        if keyword_frequencies:
-            st.subheader("키워드 언급 빈도")
-            df_keywords = pd.DataFrame(keyword_frequencies)
-            if not df_keywords.empty:
-                chart = alt.Chart(df_keywords).mark_arc().encode(
-                    theta=alt.Theta(field="frequency", type="quantitative"),
-                    color=alt.Color(field="keyword", type="nominal", title="키워드")
-                ).properties(
-                    title='키워드별 언급 빈도'
-                )
-                st.altair_chart(chart, use_container_width=True)
-
-        # Display Daily Sentiment Bar Chart
-        daily_sentiments = st.session_state.get("last_daily_sentiments")
-        if daily_sentiments:
-            st.subheader("일별 감성 변화")
-            df_sentiments = pd.DataFrame(daily_sentiments)
-            if not df_sentiments.empty:
-                df_sentiments['date'] = pd.to_datetime(df_sentiments['date'])
-                
-                # Reshape data for layered bar chart
-                df_sentiments_melted = df_sentiments.melt(
-                    id_vars=['date'], 
-                    value_vars=['positive', 'neutral', 'negative'],
-                    var_name='sentiment',
-                    value_name='count'
-                )
-
-                chart = alt.Chart(df_sentiments_melted).mark_bar().encode(
-                    x=alt.X('date:T', title='날짜'),
-                    y=alt.Y('count:Q', title='언급 빈도'),
-                    color=alt.Color('sentiment:N', 
-                        scale=alt.Scale(
-                            domain=['positive', 'neutral', 'negative'],
-                            range=['#2ecc71', '#95a5a6', '#e74c3c']
-                        ),
-                        title='감성'
-                    ),
-                    order=alt.Order(
-                      # Sort the segments of the bars by this field
-                      'sentiment',
-                      sort='ascending'
-                    )
-                ).properties(
-                    title='일별 감성 변화 추이'
-                )
-                st.altair_chart(chart, use_container_width=True)
-
-
     st.session_state.messages.append(
         {
             "role": "assistant",
@@ -705,6 +741,8 @@ if prompt := st.chat_input("분석하고 싶은 트렌드 주제를 입력해주
         record.get("title") or "새 대화",
         record_messages,
     )
+
+render_latest_results()
 
 st.markdown("---")
 st.caption("Powered by Upstage Solar LLM & LangGraph")

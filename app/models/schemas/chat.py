@@ -12,3 +12,5 @@ class ChatResponse(BaseModel):
     pdf_path: Optional[str] = Field(None, description="생성된 리포트 PDF 경로")
     process_status: str = Field(..., description="처리 상태 (success/fail)")
     logs: Optional[List[str]] = Field(None, description="처리 로그 (선택)")
+    keyword_frequencies: Optional[List[Dict[str, Any]]] = Field(None, description="키워드 빈도 데이터")
+    daily_sentiments: Optional[List[Dict[str, Any]]] = Field(None, description="일별 감성 변화 데이터")

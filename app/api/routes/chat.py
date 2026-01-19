@@ -24,5 +24,7 @@ async def chat_endpoint(
         answer=result["answer"],
         pdf_path=result["pdf_path"],
         process_status=result["status"],
-        logs=result["logs"]
+        logs=result["logs"],
+        keyword_frequencies=result.get("keyword_frequencies"),
+        daily_sentiments=result.get("daily_sentiments"),
     )

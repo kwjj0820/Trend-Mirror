@@ -8,6 +8,7 @@ from app.core.logger import logger
 from app.service.vector_service import VectorService
 import datetime
 import os
+import pandas as pd
 
 # [System Prompt] English Version - Senior Consultant Persona (Emoji-free)
 GEN_SYSTEM_PROMPT = """You are a Senior Market Strategy Consultant. 
@@ -30,6 +31,39 @@ Format: Structured Markdown
 Note: Do not use emojis or decorative icons in the output.
 """
 
+def build_daily_sentiment_series(docs, start_date, end_date):
+    if not docs:
+        return []
+
+    records = []
+    for doc in docs:
+        ts = doc.get("published_at")
+        sentiment = doc.get("sentiment")
+        if ts and sentiment:
+            try:
+                dt = datetime.datetime.fromtimestamp(float(ts))
+                records.append({"date": pd.Timestamp(dt).normalize(), "sentiment": sentiment})
+            except (ValueError, TypeError):
+                continue
+
+    if not records:
+        return []
+
+    df = pd.DataFrame(records)
+    df_pivot = df.groupby(["date", "sentiment"]).size().unstack(fill_value=0)
+
+    for s in ["positive", "neutral", "negative"]:
+        if s not in df_pivot.columns:
+            df_pivot[s] = 0
+
+    full_date_range = pd.date_range(start=start_date, end=end_date, freq="D").normalize()
+    df_pivot = df_pivot.reindex(full_date_range, fill_value=0)
+    df_pivot = df_pivot[["positive", "neutral", "negative"]]
+
+    daily_sentiments = df_pivot.reset_index().rename(columns={"index": "date"})
+    daily_sentiments["date"] = daily_sentiments["date"].dt.strftime("%Y-%m-%d")
+    return daily_sentiments.to_dict("records")
+
 
 def strategy_gen_node(state: TMState, config: RunnableConfig):
     logger.info("--- [4] Strategy Generation Node: Hybrid Search & Analysis ---")
@@ -41,9 +75,31 @@ def strategy_gen_node(state: TMState, config: RunnableConfig):
     category = slots.get('search_query', user_input)
     period_days = slots.get("period_days", 30)
     sns = "youtube"
+    end_date_dt = datetime.datetime.now()
+    start_date_dt = end_date_dt - datetime.timedelta(days=period_days)
+    start_date_str = start_date_dt.strftime("%Y-%m-%d")
+    end_date_str = end_date_dt.strftime("%Y-%m-%d")
 
     # 2. Refined Keyword Filtering
     raw_keywords_data = vector_service.get_keyword_frequencies(category=category, sns=sns, n_results=20)
+    keyword_freq_data = vector_service.get_keyword_frequencies(
+        category=category,
+        sns=sns,
+        n_results=10,
+        start_date=start_date_str,
+        end_date=end_date_str,
+    )
+    all_docs = vector_service.get_documents_for_period(
+        category=category,
+        sns=sns,
+        start_date=start_date_str,
+        end_date=end_date_str,
+    )
+    daily_sentiments_for_frontend = build_daily_sentiment_series(
+        all_docs,
+        start_date_dt,
+        end_date_dt,
+    )
 
     clean_category = category.replace(" ", "").lower()
     stopwords = ["추천", "영상", "인기", "최근", "정보", "관련", "유튜브", "내용", "조회수", "순위", "가지", "방법", "꿀팁", "이유"]
@@ -131,7 +187,9 @@ def strategy_gen_node(state: TMState, config: RunnableConfig):
 
     return {
         "final_answer": report_content,
-        "pdf_path": str(pdf_path)
+        "pdf_path": str(pdf_path),
+        "keyword_frequencies": keyword_freq_data,
+        "daily_sentiments": daily_sentiments_for_frontend,
     }
 
 

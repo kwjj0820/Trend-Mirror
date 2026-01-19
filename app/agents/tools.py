@@ -322,6 +322,9 @@ def clean_md_inline(text: str) -> str:
     # 남는 **, __ 같은 찌꺼기 제거
     t = t.replace("**", "").replace("__", "").replace("`", "")
 
+    # Normalize HTML line breaks for ReportLab
+    t = t.replace("<br />", "<br/>").replace("<br>", "<br/>")
+
     # 과한 공백 정리
     t = re.sub(r"\s{2,}", " ", t).strip()
     return t

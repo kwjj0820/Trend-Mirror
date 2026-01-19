@@ -36,6 +36,9 @@ class TMState(TypedDict, total=False):
     # --- Gen Agent Outputs ---
     final_answer: str
     final_pdf_path: str
+    pdf_path: str
+    keyword_frequencies: List[Dict[str, Any]]
+    daily_sentiments: List[Dict[str, Any]]
 
     # --- System Logs ---
     # 노트북의 simple log list 대신 LangGraph Message History와 병행 사용 권장

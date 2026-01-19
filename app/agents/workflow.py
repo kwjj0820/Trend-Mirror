@@ -55,6 +55,10 @@ def cache_check_node(state: TMState, config: RunnableConfig):
         new_end_dt = datetime.strptime(new_end_str, "%Y-%m-%d")
         new_period_days = (new_end_dt - new_start_dt).days + 1
 
+        if new_period_days <= 0:
+            logger.info("No new data to crawl. Treating as cache hit.")
+            return {"slots": slots, "cache_hit": True}
+
         slots["period_days"] = new_period_days
         logger.info(f"Updated period_days for partial crawling: {new_period_days} days")
         return {"slots": slots, "cache_hit": False}
