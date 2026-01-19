@@ -721,7 +721,129 @@ def render_top_videos_by_frequent_keyword(search_query):
     except Exception as e:
         st.error(f"영상 분석 중 오류 발생: {str(e)}")
 
+def render_integrated_results(response_text):
+    """텍스트와 차트를 통합해서 표시하는 함수"""
+    keyword_frequencies = st.session_state.get("last_keyword_frequencies")
+    daily_sentiments = st.session_state.get("last_daily_sentiments")
+    pdf_path = st.session_state.get("last_pdf_path")
+    search_query = st.session_state.get("last_search_query")
+
+    # 텍스트를 라인별로 분리
+    lines = response_text.split('\n')
+    current_section = ""
+    section_content = []
+
+    for line in lines:
+        # 헤더(#)로 시작하는 라인을 섹션 구분자로 사용
+        if line.startswith('#'):
+            # 이전 섹션 처리
+            if current_section and section_content:
+                render_section_with_charts(current_section, section_content,
+                                         keyword_frequencies, daily_sentiments,
+                                         pdf_path, search_query)
+
+            # 새 섹션 시작
+            current_section = line
+            section_content = [line]
+        else:
+            section_content.append(line)
+
+    # 마지막 섹션 처리
+    if current_section and section_content:
+        render_section_with_charts(current_section, section_content,
+                                 keyword_frequencies, daily_sentiments,
+                                 pdf_path, search_query)
+
+
+def render_section_with_charts(section_header, section_content, keyword_frequencies,
+                              daily_sentiments, pdf_path, search_query):
+    """섹션별로 텍스트와 차트를 렌더링"""
+    # 섹션 텍스트 표시
+    section_text = '\n'.join(section_content)
+    st.markdown(section_text)
+    st.markdown("")  # 간격 추가
+
+    # 섹션별로 적절한 차트 삽입
+    if "Internal SNS Trend Analysis" in section_header and keyword_frequencies:
+        # 키워드 빈도 차트
+        st.subheader("📊 키워드 언급 빈도 분석")
+        df_keywords = pd.DataFrame(keyword_frequencies)
+        if not df_keywords.empty:
+            chart = alt.Chart(df_keywords).mark_arc().encode(
+                theta=alt.Theta(field="frequency", type="quantitative"),
+                color=alt.Color(field="keyword", type="nominal", title="키워드")
+            ).properties(
+                title="키워드별 언급 빈도"
+            )
+            st.altair_chart(chart, use_container_width=True)
+            with st.expander("📋 키워드 데이터 상세보기"):
+                st.dataframe(df_keywords, use_container_width=True, hide_index=True)
+
+    elif "Sustainability and Critical Review" in section_header and daily_sentiments:
+        # 감성 변화 차트
+        st.subheader("📈 일별 감성 변화 분석")
+        df_sentiments = pd.DataFrame(daily_sentiments)
+        if not df_sentiments.empty:
+            df_sentiments["date"] = pd.to_datetime(df_sentiments["date"])
+
+            df_sentiments_melted = df_sentiments.melt(
+                id_vars=["date"],
+                value_vars=["positive", "neutral", "negative"],
+                var_name="sentiment",
+                value_name="count"
+            )
+
+            chart = alt.Chart(df_sentiments_melted).mark_bar().encode(
+                x=alt.X("date:T", title="날짜"),
+                y=alt.Y("count:Q", title="언급 빈도"),
+                color=alt.Color(
+                    "sentiment:N",
+                    scale=alt.Scale(
+                        domain=["positive", "neutral", "negative"],
+                        range=["#2ecc71", "#95a5a6", "#e74c3c"]
+                    ),
+                    title="감성"
+                ),
+                order=alt.Order(
+                  "sentiment",
+                  sort="ascending"
+                )
+            ).properties(
+                title="일별 감성 변화 추이"
+            )
+            st.altair_chart(chart, use_container_width=True)
+            with st.expander("📋 감성 데이터 상세보기"):
+                st.dataframe(
+                    df_sentiments.sort_values("date"),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+    elif "Strategic Action Plan" in section_header:
+        # 전략 섹션 뒤에 인기 영상과 PDF 다운로드
+        if search_query:
+            st.markdown("---")
+            render_top_videos_by_frequent_keyword(search_query)
+
+        if pdf_path:
+            st.markdown("---")
+            pdf_file = Path(pdf_path)
+            if pdf_file.exists():
+                st.subheader("📄 분석 리포트 다운로드")
+                with pdf_file.open("rb") as f:
+                    st.download_button(
+                        label="📥 PDF 리포트 다운로드",
+                        data=f,
+                        file_name=pdf_file.name,
+                        mime="application/pdf",
+                        use_container_width=True,
+                    )
+            else:
+                st.caption(f"PDF 파일을 찾을 수 없습니다: {pdf_file}")
+
+
 def render_latest_results():
+    """기존 함수 - 하위 호환성 유지"""
     keyword_frequencies = st.session_state.get("last_keyword_frequencies")
     daily_sentiments = st.session_state.get("last_daily_sentiments")
     pdf_path = st.session_state.get("last_pdf_path")
@@ -851,7 +973,8 @@ if prompt := st.chat_input("분석하고 싶은 트렌드 주제를 입력해주
         record_messages,
     )
 
-render_latest_results()
+    # 텍스트와 차트를 통합해서 표시
+    render_integrated_results(full_response)
 
 st.markdown("---")
 st.caption("Powered by Upstage Solar LLM & LangGraph")
