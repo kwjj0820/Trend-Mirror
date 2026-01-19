@@ -79,7 +79,7 @@ class VectorService:
 
     def get_documents_for_period(self, category: str, sns: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
         """
-        주어진 기간 내의 모든 문서 메타데이터를 반환합니다.
+        주어진 기간 내의 모든 문서 메타데이터와 내용을 반환합니다.
         """
         where_filter = {"$and": [{"category": category}, {"sns": sns}]}
         
@@ -92,12 +92,18 @@ class VectorService:
         from app.core.logger import logger
         logger.debug(f"ChromaDB filter for get_documents_for_period: {where_filter}")
         
-        results = self.vector_repository.get_by_metadata(where=where_filter, include=['metadatas'])
+        # Include 'documents' to get the actual text content
+        results = self.vector_repository.get_by_metadata(where=where_filter, include=['metadatas', 'documents'])
         
-        if results and results.get('metadatas'):
-            return results['metadatas']
+        output_docs = []
+        if results and results.get('metadatas') and results.get('documents'):
+            for i in range(len(results['metadatas'])):
+                doc_metadata = results['metadatas'][i]
+                doc_text = results['documents'][i]
+                # Combine metadata and text into a single dictionary
+                output_docs.append({"text": doc_text, **doc_metadata})
         
-        return []
+        return output_docs
 
     def check_data_existence(self, category: str, start_date: str, end_date: str) -> Dict[str, Any]:
         user_start_ts = datetime.strptime(f"{start_date}T00:00:00", "%Y-%m-%dT%H:%M:%S").timestamp()

@@ -1,18 +1,12 @@
-
-
 import streamlit as st
 import json
 import httpx
 import uuid
 import os
-import sys
-current_dir = os.path.dirname(os.path.abspath(__file__))
-root_dir = os.path.abspath(os.path.join(current_dir, "../../")) # infra/frontend/ 니까 두 번 올라감
-sys.path.append(root_dir)
-
 from pathlib import Path
 import time
-from app.core.logger import logger
+import pandas as pd
+import altair as alt
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 HISTORY_PATH = Path("reports") / "question_history.json"
@@ -22,10 +16,10 @@ st.set_page_config(
     page_icon="✨",
     layout="wide"
 )
-
 st.markdown(
     """
     <style>
+    /* Sidebar 버튼 */
     section[data-testid="stSidebar"] button {
         background: transparent !important;
         border: none !important;
@@ -33,19 +27,314 @@ st.markdown(
         width: 100%;
         text-align: left;
         padding: 0.35rem 0.4rem;
-        border-radius: 6px;
+        border-radius: 8px;
     }
-    section[data-testid="stSidebar"] button:hover {
-        background: #f3f4f6 !important;
+    section[data-testid="stSidebar"] button:hover { background: #f3f4f6 !important; }
+    section[data-testid="stSidebar"] button:focus { outline: none !important; box-shadow: none !important; }
+
+    /* Overlay & Dialog */
+    div[data-testid="stOverlay"] { background: rgba(0, 0, 0, 0.50) !important; }
+
+    div[data-testid="stDialog"] > div {
+        border-radius: 18px;
+        box-shadow: 0 22px 60px rgba(15, 23, 42, 0.18);
+        padding: 22px 24px 24px 24px;
     }
-    section[data-testid="stSidebar"] button:focus {
-        outline: none !important;
-        box-shadow: none !important;
+
+    /* Header */
+    div[data-testid="stDialog"] header {
+        display: flex !important;
+        align-items: flex-start !important;
+        gap: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        margin-bottom: 14px;
+    }
+    div[data-testid="stDialog"] header h2 {
+        flex: 1 1 auto !important;
+        font-size: 20px;
+        font-weight: 800;
+        margin: 0 !important;
+        text-align: left !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        line-height: 1.25;
+    }
+    div[data-testid="stDialog"] header button {
+        flex: 0 0 auto !important;
+        border-radius: 999px !important;
+        width: 34px !important;
+        height: 34px !important;
+        margin-top: -2px;
+    }
+
+    /* Subtitle & label */
+    div[data-testid="stDialog"] .tm-dialog-subtitle {
+        font-size: 13px;
+        font-weight: 600;
+        color: #6b7280;
+        margin: 6px 0 16px;
+        line-height: 1.35;
+    }
+    div[data-testid="stDialog"] .tm-section-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #9ca3af;
+        margin: 6px 0 10px;
+        letter-spacing: 0.02em;
+    }
+
+    /* ===== Radio -> centered 2 cards ===== */
+    div[data-testid="stDialog"] div[data-testid="stRadio"] > div {
+        display: grid !important;
+        grid-template-columns: 220px 220px;  /* 카드 고정 폭 */
+        gap: 16px;
+        justify-content: center;             /* 가로 중앙 */
+        align-content: center;
+        place-content: center;
+        width: 100%;
+    }
+    @media (max-width: 640px) {
+        div[data-testid="stDialog"] div[data-testid="stRadio"] > div {
+            grid-template-columns: 1fr !important;
+        }
+    }
+
+    /* 카드 */
+    div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"] {
+        width: 100% !important;
+        height: 96px;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 14px;
+        background: #ffffff;
+        margin: 0 !important;
+        transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 750;
+        position: relative;
+        text-align: center;
+    }
+
+    /* 라디오 동그라미/인풋 숨김 (BaseWeb 마크까지 숨김) */
+    div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"] span[aria-hidden="true"] {
+    display: none !important;
+}
+    div[data-testid="stDialog"] div[data-testid="stRadio"] input[type="radio"] {
+        display: none !important;
+    }
+
+    /* 텍스트 */
+    div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"] span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 16px;
+        color: #111827;
+        font-weight: 750;
+    }
+
+    /* Hover */
+    div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"]:hover {
+        border-color: #c7d2fe;
+        background: #f8fafc;
+    }
+
+    /* Selected (체크 없이 border/bg로만 표시) */
+    div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) {
+        border-color: #1d4ed8;
+        background: #eef2ff;
+        box-shadow: 0 10px 22px rgba(37, 99, 235, 0.14);
+    }
+
+    /* 체크(✓) 완전 제거 */
+    div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"]::after {
+        display: none !important;
+        content: none !important;
+    }
+
+    /* Primary button */
+    div[data-testid="stDialog"] .stButton > button {
+        border-radius: 14px;
+        padding: 0.95rem 1rem;
+        font-weight: 800;
+        background: #1d4ed8;
+        border: 1px solid #1d4ed8;
+        color: #ffffff;
+    }
+    div[data-testid="stDialog"] .stButton > button:hover {
+        background: #1e40af;
+        border-color: #1e40af;
+    }
+    div[data-testid="stDialog"] .stButton > button:disabled {
+        background: #e5e7eb !important;
+        border-color: #e5e7eb !important;
+        color: #9ca3af !important;
+        cursor: not-allowed !important;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
+
+
+# st.markdown(
+#     """
+#     <style>
+#     section[data-testid="stSidebar"] button {
+#         background: transparent !important;
+#         border: none !important;
+#         box-shadow: none !important;
+#         width: 100%;
+#         text-align: left;
+#         padding: 0.35rem 0.4rem;
+#         border-radius: 6px;
+#     }
+#     section[data-testid="stSidebar"] button:hover {
+#         background: #f3f4f6 !important;
+#     }
+#     section[data-testid="stSidebar"] button:focus {
+#         outline: none !important;
+#         box-shadow: none !important;
+#     }
+#     div[data-testid="stOverlay"] {
+#         background: rgba(0, 0, 0, 0.45) !important;
+#     }
+#     div[data-testid="stDialog"] > div {
+#         border-radius: 18px;
+#         box-shadow: 0 22px 60px rgba(15, 23, 42, 0.18);
+#         padding: 24px;
+#     }
+#     div[data-testid="stDialog"] header {
+#         padding-bottom: 12px;
+#         border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+#         margin-bottom: 16px;
+#     }
+#     div[data-testid="stDialog"] header h2 {
+#         font-size: 19px;
+#         font-weight: 700;
+#         white-space: nowrap;
+#         overflow: hidden;
+#         text-overflow: ellipsis;
+#         text-align: center;
+#         width: 100%;
+#     }
+#     div[data-testid="stDialog"] .tm-dialog-subtitle {
+#         font-size: 12px;
+#         font-weight: 600;
+#         color: #9ca3af;
+#         text-align: center;
+#         margin: 2px 0 18px;
+#         letter-spacing: 0.02em;
+#     }
+#     div[data-testid="stDialog"] header button {
+#         border-radius: 999px !important;
+#         width: 32px;
+#         height: 32px;
+#     }
+#     div[data-testid="stDialog"] .tm-section-label {
+#         font-size: 12px;
+#         font-weight: 600;
+#         color: #9ca3af;
+#         margin: 8px 0 10px;
+#         letter-spacing: 0.02em;
+#     }
+#     div[data-testid="stDialog"] div[data-testid="stRadio"] {
+#         display: flex;
+#         flex-direction: row;
+#         justify-content: center;
+#         gap: 12px;
+#         flex-wrap: wrap;
+#     }
+#     div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"] {
+#         border: 1px solid #e5e7eb;
+#         border-radius: 12px;
+#         padding: 16px;
+#         background: #ffffff;
+#         margin-bottom: 10px;
+#         width: 220px;
+#         height: 76px;
+#         transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+#         position: relative;
+#         cursor: pointer;
+#         display: flex;
+#         align-items: center;
+#         justify-content: center;
+#         font-weight: 600;
+#     }
+#     div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"] span {
+#         display: inline-flex;
+#         align-items: center;
+#         gap: 6px;
+#     }
+#     div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"] span::before {
+#         content: "[";
+#         color: #64748b;
+#     }
+#     div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"] span::after {
+#         content: "]";
+#         color: #64748b;
+#     }
+#     div[data-testid="stDialog"] div[data-testid="stRadio"] input[type="radio"] {
+#         display: none;
+#     }
+#     div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"]:hover {
+#         border-color: #c7d2fe;
+#     }
+#     div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) {
+#         border-color: #1d4ed8;
+#         background: #eef2ff;
+#         box-shadow: 0 10px 22px rgba(37, 99, 235, 0.14);
+#     }
+#     div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"]::after {
+#         content: "✓";
+#         position: absolute;
+#         right: 14px;
+#         top: 50%;
+#         transform: translateY(-50%);
+#         width: 22px;
+#         height: 22px;
+#         border-radius: 999px;
+#         background: #e2e8f0;
+#         color: #64748b;
+#         font-size: 12px;
+#         display: grid;
+#         place-items: center;
+#         opacity: 0;
+#         transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease;
+#     }
+#     div[data-testid="stDialog"] div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked)::after {
+#         opacity: 1;
+#         background: #1d4ed8;
+#         color: #ffffff;
+#     }
+#     div[data-testid="stDialog"] .stButton > button {
+#         border-radius: 12px;
+#         padding: 0.85rem 1rem;
+#         font-weight: 600;
+#         background: #1d4ed8;
+#         border: 1px solid #1d4ed8;
+#         color: #ffffff;
+#     }
+#     div[data-testid="stDialog"] .stButton > button:hover {
+#         background: #1e40af;
+#         border-color: #1e40af;
+#     }
+#     div[data-testid="stDialog"] .stButton > button:disabled {
+#         background: #e5e7eb !important;
+#         color: #9ca3af !important;
+#         cursor: not-allowed !important;
+#     }
+#     </style>
+#     """,
+#     unsafe_allow_html=True
+# )
+
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
@@ -57,6 +346,60 @@ if "question_history" not in st.session_state:
     st.session_state.question_history = {}
 if "last_pdf_path" not in st.session_state:
     st.session_state.last_pdf_path = None
+if "user_type" not in st.session_state:
+    st.session_state.user_type = "일반 자영업자"
+if "user_type_confirmed" not in st.session_state:
+    st.session_state.user_type_confirmed = False
+
+
+# @st.dialog("어떤 사용자로 시작할까요?")
+# def user_type_dialog():
+#     options = ["일반 자영업자", "마케터"]
+#     current = st.session_state.get("user_type", options[0])
+#     current_index = options.index(current) if current in options else 0
+#     st.markdown('<div class="tm-dialog-subtitle">사용자 유형 선택</div>', unsafe_allow_html=True)
+#     st.markdown('<div class="tm-section-label">업종 선택</div>', unsafe_allow_html=True)
+#     choice = st.radio(
+#         "업종 선택",
+#         options,
+#         index=current_index,
+#         label_visibility="collapsed",
+#         horizontal=True,
+#     )
+#     if st.button("선택 완료", type="primary", use_container_width=True):
+#         st.session_state.user_type = choice
+#         st.session_state.user_type_confirmed = True
+#         st.rerun()
+        
+@st.dialog("어떤 사용자로 시작할까요?")
+def user_type_dialog():
+    options = ["일반 자영업자", "마케터"]
+    current = st.session_state.get("user_type", options[0])
+    current_index = options.index(current) if current in options else 0
+
+    st.markdown(
+        '<div class="tm-dialog-subtitle">선택한 유형에 맞춰 TrendMirror를 설정해드려요</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown('<div class="tm-section-label">사용자 유형</div>', unsafe_allow_html=True)
+
+    choice = st.radio(
+        "사용자 유형",
+        options,
+        index=current_index,
+        label_visibility="collapsed",
+        horizontal=True,
+    )
+
+    if st.button("선택 완료", type="primary", use_container_width=True):
+        st.session_state.user_type = choice
+        st.session_state.user_type_confirmed = True
+        st.rerun()
+
+##
+
+
+
 
 
 def load_history() -> dict:
@@ -84,6 +427,9 @@ if not st.session_state.messages:
     current_record = history.get(st.session_state.session_id)
     if isinstance(current_record, dict):
         st.session_state.messages = current_record.get("messages", [])
+
+if not st.session_state.user_type_confirmed:
+    user_type_dialog()
 
 
 def get_session_record(history: dict, session_id: str) -> dict:
@@ -123,6 +469,14 @@ st.markdown("트렌드 분석 마케팅 report")
 
 with st.sidebar:
     st.header("설정")
+
+    st.subheader("사용자 유형")
+    st.radio(
+        "분석을 요청하는 사용자를 선택하세요.",
+        ["일반 자영업자", "마케터"],
+        key="user_type",
+    )
+
     top_cols = st.columns([1, 1], gap="small")
     if top_cols[0].button("새 대화"):
         st.session_state.messages = []
@@ -191,6 +545,29 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 
+def build_prompt_with_user_type(prompt, user_type):
+    """사용자 유형(일반 자영업자 / 마케터)에 따라 프롬프트에 컨텍스트를 추가합니다."""
+    if not user_type:
+        return prompt
+
+    if user_type == "일반 자영업자":
+        persona = (
+            "이 사용자는 일반 자영업자(자영업 사장님)입니다. "
+            "매장/비즈니스 운영과 관련된 실질적인 마케팅 인사이트와 "
+            "실행 가능한 액션 위주로 설명해 주세요."
+        )
+    elif user_type == "마케터":
+        persona = (
+            "이 사용자는 마케터입니다. "
+            "캠페인 전략, 퍼널 설계, 성과 지표, 리포트 인사이트 등 "
+            "마케팅 실무 관점에서 설명해 주세요."
+        )
+    else:
+        persona = f"이 사용자의 유형은 '{user_type}' 입니다."
+
+    return f"[사용자 유형: {user_type}]\n{persona}\n\n{prompt}"
+
+
 def response_generator(prompt, session_id):
     try:
         status = st.status("trend mirror 에이전트가 분석 중입니다....", expanded=True)
@@ -212,9 +589,18 @@ def response_generator(prompt, session_id):
 
         data = r.json()
         answer = data.get("answer") or data.get("result") or str(data)
-        pdf_path = data.get("pdf_path")
-        if pdf_path:
-            st.session_state.last_pdf_path = pdf_path
+        
+        # Clear previous chart data
+        st.session_state.last_keyword_frequencies = None
+        st.session_state.last_daily_sentiments = None
+
+        keyword_frequencies = data.get("keyword_frequencies") # Retrieve new data
+        daily_sentiments = data.get("daily_sentiments") # Retrieve new data
+
+        if keyword_frequencies: # Store in session state
+            st.session_state.last_keyword_frequencies = keyword_frequencies
+        if daily_sentiments: # Store in session state
+            st.session_state.last_daily_sentiments = daily_sentiments
 
         status.update(label="분석 완료", state="complete", expanded=False)
         yield answer
@@ -224,61 +610,101 @@ def response_generator(prompt, session_id):
 
 
 if prompt := st.chat_input("분석하고 싶은 트렌드 주제를 입력해주세요."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    user_type = st.session_state.get("user_type", "일반 자영업자")
+    display_prompt = f"[{user_type}] {prompt}" if user_type else prompt
+    prompt_for_model = build_prompt_with_user_type(prompt, user_type)
+
+    st.session_state.messages.append({"role": "user", "content": display_prompt})
     history = st.session_state.question_history
     record = get_session_record(history, st.session_state.session_id)
     if not record.get("title"):
         record["title"] = prompt
     record_messages = record.get("messages", [])
-    record_messages.append({"role": "user", "content": prompt})
+    record_messages.append({"role": "user", "content": display_prompt})
     record["messages"] = record_messages
-    save_session_record(history, st.session_state.session_id, record.get("title") or prompt, record_messages)
+    save_session_record(
+        history,
+        st.session_state.session_id,
+        record.get("title") or prompt,
+        record_messages,
+    )
 
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(display_prompt)
 
     with st.chat_message("assistant"):
         full_response = st.write_stream(
-            response_generator(prompt, st.session_state.session_id)
+            response_generator(prompt_for_model, st.session_state.session_id)
         )
 
-        pdf_path = st.session_state.last_pdf_path
-        
-        # --- START OF LOGGING DEBUG BLOCK ---
-        logger.info("--- UI DEBUGGING BLOCK START ---")
-        logger.info(f"Value of st.session_state.last_pdf_path: '{pdf_path}'")
-        if pdf_path:
-            pdf_file = Path(pdf_path)
-            absolute_path = pdf_file.absolute()
-            file_exists = pdf_file.exists()
-            
-            logger.info(f"Resolved absolute path: '{absolute_path}'")
-            logger.info(f"Result of pdf_file.exists(): {file_exists}")
-            
-            if file_exists:
-                logger.info("File exists. Creating download button.")
-                st.download_button(
-                    label="PDF 다운로드",
-                    data=pdf_file.read_bytes(),
-                    file_name=pdf_file.name,
-                    mime="application/pdf"
+        # Display Keyword Frequencies Pie Chart
+        keyword_frequencies = st.session_state.get("last_keyword_frequencies")
+        if keyword_frequencies:
+            st.subheader("키워드 언급 빈도")
+            df_keywords = pd.DataFrame(keyword_frequencies)
+            if not df_keywords.empty:
+                chart = alt.Chart(df_keywords).mark_arc().encode(
+                    theta=alt.Theta(field="frequency", type="quantitative"),
+                    color=alt.Color(field="keyword", type="nominal", title="키워드")
+                ).properties(
+                    title='키워드별 언급 빈도'
                 )
-            else:
-                logger.error("File path received, but file does not exist at that path.")
-        else:
-            logger.warning("No pdf_path found in session state.")
-        logger.info("--- UI DEBUGGING BLOCK END ---")
+                st.altair_chart(chart, use_container_width=True)
 
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": full_response
-    })
+        # Display Daily Sentiment Bar Chart
+        daily_sentiments = st.session_state.get("last_daily_sentiments")
+        if daily_sentiments:
+            st.subheader("일별 감성 변화")
+            df_sentiments = pd.DataFrame(daily_sentiments)
+            if not df_sentiments.empty:
+                df_sentiments['date'] = pd.to_datetime(df_sentiments['date'])
+                
+                # Reshape data for layered bar chart
+                df_sentiments_melted = df_sentiments.melt(
+                    id_vars=['date'], 
+                    value_vars=['positive', 'neutral', 'negative'],
+                    var_name='sentiment',
+                    value_name='count'
+                )
+
+                chart = alt.Chart(df_sentiments_melted).mark_bar().encode(
+                    x=alt.X('date:T', title='날짜'),
+                    y=alt.Y('count:Q', title='언급 빈도'),
+                    color=alt.Color('sentiment:N', 
+                        scale=alt.Scale(
+                            domain=['positive', 'neutral', 'negative'],
+                            range=['#2ecc71', '#95a5a6', '#e74c3c']
+                        ),
+                        title='감성'
+                    ),
+                    order=alt.Order(
+                      # Sort the segments of the bars by this field
+                      'sentiment',
+                      sort='ascending'
+                    )
+                ).properties(
+                    title='일별 감성 변화 추이'
+                )
+                st.altair_chart(chart, use_container_width=True)
+
+
+    st.session_state.messages.append(
+        {
+            "role": "assistant",
+            "content": full_response,
+        }
+    )
     history = st.session_state.question_history
     record = get_session_record(history, st.session_state.session_id)
     record_messages = record.get("messages", [])
     record_messages.append({"role": "assistant", "content": full_response})
     record["messages"] = record_messages
-    save_session_record(history, st.session_state.session_id, record.get("title") or "새 대화", record_messages)
+    save_session_record(
+        history,
+        st.session_state.session_id,
+        record.get("title") or "새 대화",
+        record_messages,
+    )
 
 st.markdown("---")
 st.caption("Powered by Upstage Solar LLM & LangGraph")

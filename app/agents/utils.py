@@ -2,6 +2,7 @@
 import json
 import re
 import tiktoken
+import json_repair
 from datetime import datetime
 from app.core.llm import get_solar_chat
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -16,16 +17,28 @@ def get_current_time_str():
     """현재 시간을 문자열로 반환 (Guidebook Step 5.1 참조)"""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+
 def clean_and_parse_json(text: str):
-    """LLM 응답에서 JSON만 추출하여 파싱"""
+    """
+    LLM 응답에서 JSON을 추출하고, 문법 오류(따옴표, 쉼표 등)를 자동 보정하여 파싱
+    """
+    if not text:
+        return None
+
+    # 1. 마크다운 코드 블록(```json ... ```) 제거 시도
+    #    (LLM이 잡담과 함께 코드를 줄 경우를 대비해 우선적으로 추출)
+    match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    if match:
+        text = match.group(1)
+
+    # 2. json_repair를 사용하여 파싱 시도
+    #    (이 라이브러리는 중괄호 찾기, 이스케이프 안 된 따옴표 처리 등을 내부적으로 수행함)
     try:
-        match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-        if match: text = match.group(1)
-        else:
-            match = re.search(r"(\{.*\})", text, re.DOTALL)
-            if match: text = match.group(1)
-        return json.loads(text)
-    except:
+        decoded_object = json_repair.loads(text)
+        return decoded_object
+    except Exception as e:
+        # 파싱 실패 시 로그를 남기거나 None 반환
+        print(f"[ERROR] JSON Parsing Failed: {e}")
         return None
 
 def count_tokens(text: str) -> int:

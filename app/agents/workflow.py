@@ -7,8 +7,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.runnables import RunnableConfig
 from app.agents.state import TMState
 from app.agents.subgraphs.strategy_build import strategy_build_graph
-from app.agents.subgraphs.strategy_gen import analysis_graph # 이름 변경
-from app.agents.subgraphs.visualization_gen import visualization_graph # 신규 추가
+from app.agents.subgraphs.strategy_gen import strategy_gen_node # 이름 변경
 from app.agents.subgraphs.youtube_process import youtube_process_graph
 from app.core.logger import logger
 from app.service.sync_service import SyncService
@@ -71,9 +70,9 @@ def router_node(state: TMState):
         return END
 
     if state.get("cache_hit"):
-        logger.info("[Router] Cache Hit! Skipping to Visualization.")
-        # 캐시가 있으면 데이터 수집 및 분석을 건너뛰고 바로 시각화로 이동
-        return "visualization"
+        logger.info("[Router] Cache Hit! Skipping to Analysis.")
+        # 캐시가 있으면 데이터 수집 및 분석을 건너뛰고 바로 분석으로 이동
+        return "analysis"
 
     logger.info("[Router] Cache Miss. Routing to Data Collection (youtube_process).")
     return "youtube_process"
@@ -108,8 +107,7 @@ workflow.add_node("strategy_build", strategy_build_graph)
 workflow.add_node("cache_check", cache_check_node)
 workflow.add_node("youtube_process", youtube_process_graph)
 workflow.add_node("sync_db", sync_db_node)
-workflow.add_node("analysis", analysis_graph) # 이름 변경
-workflow.add_node("visualization", visualization_graph) # 신규 추가
+workflow.add_node("analysis", strategy_gen_node) # 이름 변경
 
 # 엣지(흐름) 정의
 workflow.set_entry_point("strategy_build")
@@ -121,7 +119,7 @@ workflow.add_conditional_edges(
     router_node,
     {
         "youtube_process": "youtube_process", # Cache Miss
-        "visualization": "visualization",   # Cache Hit
+        "analysis": "analysis",   # Cache Hit
         END: END
     }
 )
@@ -129,8 +127,7 @@ workflow.add_conditional_edges(
 # 데이터 수집 및 분석 후 시각화로 이어지는 기본 흐름
 workflow.add_edge("youtube_process", "sync_db")
 workflow.add_edge("sync_db", "analysis")
-workflow.add_edge("analysis", "visualization")
-workflow.add_edge("visualization", END)
+workflow.add_edge("analysis", END)
 
 # 체크포인터
 memory = MemorySaver()

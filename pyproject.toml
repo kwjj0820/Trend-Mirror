@@ -26,5 +26,6 @@ dependencies = [
     "matplotlib",
     "seaborn",
     "numpy",
-    "streamlit"
+    "streamlit",
+    "json-repair"
 ]
