@@ -27,5 +27,6 @@ dependencies = [
     "seaborn",
     "numpy",
     "streamlit",
-    "json-repair"
+    "json-repair",
+    "fpdf"
 ]
