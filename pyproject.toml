@@ -28,5 +28,7 @@ dependencies = [
     "numpy",
     "streamlit",
     "json-repair",
-    "fpdf"
+    "fpdf",
+    "tqdm",
+    "altair"
 ]

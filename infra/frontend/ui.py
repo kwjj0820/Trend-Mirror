@@ -16,8 +16,10 @@ import tempfile
 # --- 설정 및 상수 ---
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 HISTORY_PATH = Path("reports") / "question_history.json"
-# 실행 폴더에 'NanumGothic.ttf' 파일이 있어야 한글이 나옵니다.
-FONT_PATH = "NanumGothic.ttf"
+
+# PDF 및 차트 생성에 사용할 폰트 경로 (중요)
+FONT_REGULAR_PATH = "resources/fonts/NanumGothic-Regular.ttf"
+FONT_BOLD_PATH = "resources/fonts/NanumGothic-Bold.ttf"
 
 st.set_page_config(
     page_title="TREND MIRROR",
@@ -161,8 +163,8 @@ def create_chart_image(data, chart_type):
         return None
 
     # 한글 폰트 설정 (차트 내부 글씨 깨짐 방지)
-    if os.path.exists(FONT_PATH):
-        prop = fm.FontProperties(fname=FONT_PATH)
+    if os.path.exists(FONT_REGULAR_PATH):
+        prop = fm.FontProperties(fname=FONT_REGULAR_PATH)
         plt.rcParams['font.family'] = prop.get_name()
     else:
         # 폰트 파일이 없으면 시스템 폰트로 대체 (깨질 수 있음)
@@ -218,12 +220,12 @@ def generate_pdf_report(response_text, keyword_data, sentiment_data):
     pdf = FPDF()
     pdf.add_page()
 
-    # 폰트 등록 (필수: FONT_PATH에 지정된 파일이 있어야 함)
+    # 폰트 등록 (필수)
     font_ok = False
-    if os.path.exists(FONT_PATH):
+    if os.path.exists(FONT_REGULAR_PATH) and os.path.exists(FONT_BOLD_PATH):
         try:
-            pdf.add_font('NanumGothic', '', FONT_PATH, uni=True)
-            pdf.add_font('NanumGothic', 'B', FONT_PATH, uni=True)
+            pdf.add_font('NanumGothic', '', FONT_REGULAR_PATH, uni=True)
+            pdf.add_font('NanumGothic', 'B', FONT_BOLD_PATH, uni=True)
             pdf.set_font('NanumGothic', '', 11)
             font_ok = True
         except Exception as e:
