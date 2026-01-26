@@ -68,8 +68,24 @@ graph TD;
 ```
 .
 ├── .env.example        # 환경 변수 예시 파일
-├── start.sh            # 백엔드/프론트엔드 실행 스크립트
+├── .gitignore
 ├── app/                # 핵심 애플리케이션 로직
+│   ├── main.py         # FastAPI 앱 초기화 및 설정
+│   ├── agents/         # LangGraph 기반 에이전트 및 워크플로우
+│   ├── api/            # API 라우터 및 엔드포인트
+│   ├── core/           # DB 연결, LLM 클라이언트, 로거 등 핵심 모듈
+│   ├── models/         # Pydantic 스키마
+│   ├── repository/     # 데이터베이스 및 외부 API 클라이언트
+│   └── service/        # 비즈니스 로직 서비스
+├── chroma_tm/          # ChromaDB 데이터 저장소
+├── downloads/          # 크롤링 데이터 임시 저장
+├── logs/               # 실행 로그
+├── reports/            # 생성된 PDF 보고서
+├── resources/          # 폰트 등 정적 리소스
+├── scripts/            # DB 동기화 등 보조 스크립트
+├── main.py             # (현재 사용되지 않음, app/main.py가 메인)
+├── pyproject.toml      # 프로젝트 의존성 및 메타데이터
+└── README.md
 ...
 ```
 
